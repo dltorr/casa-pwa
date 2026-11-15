@@ -303,6 +303,33 @@ dialog.zoom::backdrop { background: #000; }
 .device-dot { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; }
 .zoom-close { position: fixed; top: calc(env(safe-area-inset-top) + 10px); right: 10px; z-index: 2; background: rgba(255, 255, 255, .85); color: #000; }
 
+/* ---------- Mandos ---------- */
+.remote { flex-direction: column; align-items: stretch; gap: 14px; padding: 16px; }
+.remote-head { display: flex; align-items: center; gap: 10px; }
+.remote-title { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.dev-status { font-size: 13px; color: var(--muted); }
+.dev-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+.dev-dot.on { background: var(--ok); }
+.dev-dot.standby { background: var(--task); }
+.dev-dot.off { background: var(--danger); }
+.dev-latency { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dev-latency.err { color: var(--danger); }
+.remote-info { display: flex; justify-content: space-between; gap: 8px; margin-top: -8px; }
+.remote-info .hint { margin: 0; }
+.rc-row { display: flex; justify-content: center; gap: 12px; }
+.rc-row.apps .btn { flex: 1; }
+.rc-btn {
+  display: inline-grid; place-items: center; width: 60px; height: 60px; border: 0; border-radius: 18px;
+  background: var(--surface-2); color: var(--text); cursor: pointer; touch-action: manipulation;
+  -webkit-user-select: none; user-select: none;
+}
+.rc-btn:active { transform: scale(.94); background: var(--accent-soft); }
+.rc-btn .ico svg { width: 24px; height: 24px; }
+.rc-btn.danger { color: var(--danger); }
+.rc-pad { display: grid; grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(3, 64px); gap: 6px; justify-content: center; }
+.rc-pad .rc-btn { width: 64px; height: 64px; border-radius: 50%; }
+.rc-pad .rc-btn.ok { background: var(--accent); color: #fff; }
+
 /* ---------- Conflictos ---------- */
 .conflict { margin-top: 12px; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 .conflict-name { font-weight: 700; margin-bottom: 10px; }

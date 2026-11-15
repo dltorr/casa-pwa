@@ -166,6 +166,34 @@ export function setConn(c) {
 
 // ---------- MQTT ----------
 let client = null;
+
+// ---------- Dispositivos (mandos): mensajes que no son secciones de datos ----------
+// Ej.: casa/chromecast/estado (retenido) y casa/chromecast/ack. No se guardan ni se fusionan.
+const rawCache = new Map();
+const rawListeners = new Map();
+
+function onRawMessage(topic, payload) {
+  let data;
+  try { data = JSON.parse(payload.toString()); } catch { return; }
+  rawCache.set(topic, data);
+  (rawListeners.get(topic) || []).forEach((fn) => fn(data));
+}
+
+export function onTopic(topic, fn) {
+  if (!rawListeners.has(topic)) rawListeners.set(topic, new Set());
+  rawListeners.get(topic).add(fn);
+  if (rawCache.has(topic)) fn(rawCache.get(topic));
+  return () => rawListeners.get(topic).delete(fn);
+}
+
+// Envía una orden a un dispositivo. Devuelve false si no hay conexión con el broker.
+export function publishRaw(topic, data) {
+  if (!client || !client.connected) return false;
+  client.publish(topic, JSON.stringify(data), { qos: 0, retain: false });
+  return true;
+}
+
+export const isConnected = () => !!(client && client.connected);
 let lastError = '';
 let reconnectTimer = null;
 let waitTimer = null;
@@ -186,7 +214,7 @@ function send(s) {
 
 function onMessage(topic, payload) {
   const s = topic.slice(PREFIX.length);
-  if (!SECTIONS.includes(s)) return;
+  if (!SECTIONS.includes(s)) { onRawMessage(topic, payload); return; }
   const json = payload.toString();
   let remote;
   try { remote = JSON.parse(json); } catch { return; }
@@ -247,7 +275,7 @@ export function connect() {
     lastError = '';
     setStatus('conectado', true);
     SECTIONS.forEach((s) => awaiting.add(s));
-    cl.subscribe(PREFIX + '+', { qos: 1 });
+    cl.subscribe(PREFIX + '#', { qos: 1 }); // secciones (casa/x) y dispositivos (casa/x/y)
     clearTimeout(waitTimer);
     waitTimer = setTimeout(() => {            // secciones que el broker aún no tiene
       [...awaiting].forEach((s) => { awaiting.delete(s); send(s); });

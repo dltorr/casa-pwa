@@ -14,6 +14,7 @@ export const SECTION_OPTIONS = [
   ['almacen', 'Almacenaje'],
   ['menu', 'Menú Trueba'],
   ['semanal', 'Menú semanal'],
+  ['mandos', 'Mandos'],
   ['ajustes', 'Ajustes'],
   ['mejoras', 'Mejoras'],
   ['nueva', 'Nueva sección'],

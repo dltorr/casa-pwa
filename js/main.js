@@ -13,6 +13,7 @@ import ajustes from './views/ajustes.js';
 import mejoras from './views/mejoras.js';
 import menu, { autoCheckMenu } from './views/menu.js';
 import semanal from './views/semanal.js';
+import mandos from './views/mandos.js';
 import { sheet, field } from './ui.js';
 import { initConflicts } from './components/conflicts.js';
 
@@ -29,6 +30,7 @@ const ROUTES = {
   mejoras:    { title: 'Mejoras de la app',  view: mejoras, parent: 'mas' },
   menu:       { title: 'Menú Trueba',        view: menu,    parent: 'mas' },
   semanal:    { title: 'Menú semanal',       view: semanal, parent: 'mas' },
+  mandos:     { title: 'Mandos',             view: mandos,  parent: 'mas' },
 };
 
 const TABS = [
