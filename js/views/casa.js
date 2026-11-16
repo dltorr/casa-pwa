@@ -22,6 +22,34 @@ const num = (v, d = 1) => (typeof v === 'number' && isFinite(v) ? v.toFixed(d).r
 const tempOf = (d) => (d.t ?? d.temp);
 const humOf = (d) => (d.h ?? d.hum);
 
+// WiFi: % aproximado a partir del RSSI. -50 dBm o mejor = 100 %, -100 dBm = 0 %.
+const wifiPct = (rssi) => (typeof rssi === 'number' ? Math.max(0, Math.min(100, 2 * (rssi + 100))) : null);
+
+// Icono de 4 rayas: se encienden en proporción al % (cada raya = 25 %).
+// 1 raya roja, 2 naranjas, 3 o 4 en el color normal (blanco en el mapa).
+function wifiIcon(rssi) {
+  const pct = wifiPct(rssi);
+  if (pct == null) return null;
+  const bars = Math.ceil(pct / 25);
+  const lvl = bars <= 1 ? 'bad' : bars === 2 ? 'mid' : 'ok';
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 20 16');
+  svg.setAttribute('class', 'wifi-bars ' + lvl);
+  svg.setAttribute('aria-label', `WiFi ${pct} %`);
+  for (let i = 0; i < 4; i++) {
+    const r = document.createElementNS(NS, 'rect');
+    const hgt = 4 + i * 4;
+    r.setAttribute('x', String(1 + i * 5)); r.setAttribute('y', String(16 - hgt));
+    r.setAttribute('width', '3.4'); r.setAttribute('height', String(hgt)); r.setAttribute('rx', '1');
+    if (i < bars) r.setAttribute('class', 'on');
+    svg.append(r);
+  }
+  return svg;
+}
+
+const reading = (d) => [`${num(tempOf(d))}°  ${num(humOf(d), 0)} %`, wifiIcon(d.rssi)];
+
 function ago(sec) {
   if (sec < 60) return `hace ${Math.max(0, Math.round(sec))} s`;
   if (sec < 3600) return `hace ${Math.round(sec / 60)} min`;
@@ -107,7 +135,7 @@ export default function render(root, params) {
         type: 'button', class: 'sensor-tag' + (isStale(s) ? ' stale' : ''),
         style: `left:${r.pos.x}%;top:${r.pos.y}%`,
         onclick: (e) => { e.stopPropagation(); details(nodo); },
-      }, `${num(tempOf(s.data))}° · ${num(humOf(s.data), 0)} %`));
+      }, ...reading(s.data)));
     });
     store.rooms().forEach((r) => {
       if (!r.pos || r.pos.floor !== floor || withSensor.has(r.id)) return;
@@ -131,7 +159,7 @@ export default function render(root, params) {
     return h('button', { type: 'button', class: 'row sensor-row' + (isStale(s) ? ' stale' : ''), onclick: () => details(nodo) },
       h('span', { class: 'dev-dot' + (isStale(s) ? ' off' : ' on') }),
       h('span', { class: 'row-main stacked' },
-        h('span', { class: 'row-title' }, `${num(tempOf(d))}° · ${num(humOf(d), 0)} %`),
+        h('span', { class: 'row-title reading' }, ...reading(d)),
         h('span', { class: 'row-sub' }, `${nodo} · ${where} · ${s.estado === 'offline' ? 'desconectado' : ago(age)}`)));
   }
 
@@ -157,7 +185,7 @@ export default function render(root, params) {
       line('Estado', s.estado === 'offline' ? 'desconectado' : (s.estado === 'online' ? 'conectado' : '–')),
       line('Nodo', nodo),
       line('Ubicación (ubic)', d.ubic || '–'),
-      line('Señal WiFi', d.rssi != null ? `${d.rssi} dBm` : '–'),
+      line('Señal WiFi', d.rssi != null ? `${wifiPct(d.rssi)} % (${d.rssi} dBm)` : '–'),
       line('Red', d.red || '–'),
       line('IP', d.ip || '–'),
       line('Firmware', d.fw || '–'),

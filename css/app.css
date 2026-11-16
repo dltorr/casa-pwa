@@ -314,6 +314,13 @@ dialog.zoom::backdrop { background: #000; }
   background: var(--accent); color: #fff; font: inherit; font-size: 13px; font-weight: 700;
   font-variant-numeric: tabular-nums; white-space: nowrap; box-shadow: 0 1px 4px rgba(0, 0, 0, .3); cursor: pointer;
 }
+.sensor-tag, .reading { display: inline-flex; align-items: center; gap: 6px; white-space: pre; }
+.wifi-bars { width: 20px; height: 16px; flex: none; }
+.wifi-bars rect { fill: currentColor; opacity: .35; }
+.wifi-bars rect.on { opacity: 1; }
+.wifi-bars.bad rect.on { fill: #ff5a52; }
+.wifi-bars.mid rect.on { fill: #ffb321; }
+.sensor-tag.stale .wifi-bars rect.on { fill: currentColor; }
 .sensor-tag.stale { background: #9ca3af; text-decoration: line-through; }
 .room-pin { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: #9ca3af; border: 2px solid #fff; }
 .room-pin.current { background: var(--accent); }
