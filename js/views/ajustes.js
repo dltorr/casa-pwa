@@ -3,6 +3,7 @@
 import * as store from '../store.js';
 import { h, icon, field, empty, sectionTitle } from '../ui.js';
 import { VERSION } from '../version.js';
+import { FLOORS } from './casa.js';
 
 function connectionForm() {
   const c = store.getConn();
@@ -43,7 +44,8 @@ function roomCard(r) {
         class: 'icon-btn', type: 'button', 'aria-label': 'Renombrar',
         onclick: () => {
           const n = prompt('Nombre de la habitación', r.name);
-          if (n && n.trim()) updateRoom(r.id, (x) => { x.name = n.trim(); });
+          // Al renombrar se fija el código anterior: así los sensores siguen enlazados.
+          if (n && n.trim()) updateRoom(r.id, (x) => { x.code = store.roomCode(x); x.name = n.trim(); });
         },
       }, icon('edit')),
       h('button', {
@@ -54,6 +56,18 @@ function roomCard(r) {
           store.update('almacen', (l) => l.map((i) => (i.roomId === r.id ? { ...i, roomId: '', locationId: '' } : i)));
         },
       }, icon('trash'))),
+    h('div', { class: 'room-map' },
+      h('button', {
+        type: 'button', class: 'code-btn', 'aria-label': 'Cambiar código para sensores',
+        onclick: () => {
+          const c = prompt('Código para sensores (lo que el nodo manda en "ubic")', store.roomCode(r));
+          if (c != null && store.slug(c)) updateRoom(r.id, (x) => { x.code = store.slug(c); });
+        },
+      }, 'código: ', h('code', {}, store.roomCode(r))),
+      h('span', { class: 'hint' }, r.pos
+        ? 'en el mapa · ' + ((FLOORS.find((f) => f.id === r.pos.floor) || {}).label || '').toLowerCase()
+        : 'sin colocar'),
+      h('a', { class: 'btn small', href: '#/casa?colocar=' + r.id }, r.pos ? 'Recolocar' : 'Colocar en el mapa')),
     h('div', { class: 'chips' },
       r.locations.length
         ? r.locations.map((l) => h('span', { class: 'chip' }, l.name,
@@ -99,7 +113,7 @@ export default function render(root) {
       e.preventDefault();
       const name = roomInput.value.trim();
       if (!name) return;
-      store.update('config', (c) => { c.rooms = c.rooms || []; c.rooms.push({ id: store.uid(), name, locations: [] }); });
+      store.update('config', (c) => { c.rooms = c.rooms || []; c.rooms.push({ id: store.uid(), name, code: store.slug(name), locations: [] }); });
       roomInput.value = '';
     },
   }, roomInput, h('button', { class: 'btn primary', type: 'submit' }, icon('plus'), 'Añadir'));

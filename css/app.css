@@ -297,9 +297,38 @@ dialog.zoom::backdrop { background: #000; }
 .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-bottom: 12px; border-radius: 12px; background: var(--surface-2); }
 .seg-btn { padding: 9px 8px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; }
 .seg-btn[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
-.plan { position: relative; padding: 8px; border: 1px solid var(--border); border-radius: 18px; background: #fff; }
-.plan-img { display: block; width: 100%; height: auto; max-height: 62vh; object-fit: contain; }
-.plan-layer { position: absolute; inset: 8px; pointer-events: none; }
+.plan { display: flex; justify-content: center; padding: 8px; border: 1px solid var(--border); border-radius: 18px; background: #fff; }
+/* La caja se ajusta a la imagen: así x/y en % caen en el mismo sitio del plano en cualquier pantalla. */
+.plan-box { position: relative; max-width: 100%; }
+.plan-img { display: block; max-width: 100%; width: auto; height: auto; max-height: 62vh; }
+.plan-layer { position: absolute; inset: 0; pointer-events: none; }
+.plan-layer > * { pointer-events: auto; }
+.plan.placing { outline: 3px dashed var(--accent); outline-offset: 2px; }
+.plan.placing .plan-box { cursor: crosshair; }
+.plan.placing .plan-layer > * { pointer-events: none; }
+.place-banner { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-size: 14px; }
+.place-banner span { flex: 1; }
+.sensor-tag {
+  position: absolute; transform: translate(-50%, -50%);
+  padding: 4px 8px; border: 0; border-radius: 999px;
+  background: var(--accent); color: #fff; font: inherit; font-size: 13px; font-weight: 700;
+  font-variant-numeric: tabular-nums; white-space: nowrap; box-shadow: 0 1px 4px rgba(0, 0, 0, .3); cursor: pointer;
+}
+.sensor-tag.stale { background: #9ca3af; text-decoration: line-through; }
+.room-pin { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: #9ca3af; border: 2px solid #fff; }
+.room-pin.current { background: var(--accent); }
+.sensor-row { width: 100%; cursor: pointer; }
+.sensor-row.stale .row-title { color: var(--muted); }
+.row-sub { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kv-list { display: flex; flex-direction: column; gap: 2px; }
+.kv { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 15px; }
+.kv span { color: var(--muted); }
+.kv strong { text-align: right; font-weight: 600; overflow-wrap: anywhere; }
+.room-map { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0 4px; }
+.room-map .hint { margin: 0; flex: 1; }
+.code-btn { padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+.code-btn code { color: var(--text); }
+.btn.small { padding: 7px 12px; font-size: 14px; }
 .device-dot { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; }
 .zoom-close { position: fixed; top: calc(env(safe-area-inset-top) + 10px); right: 10px; z-index: 2; background: rgba(255, 255, 255, .85); color: #000; }
 
@@ -329,6 +358,20 @@ dialog.zoom::backdrop { background: #000; }
 .rc-pad { display: grid; grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(3, 64px); gap: 6px; justify-content: center; }
 .rc-pad .rc-btn { width: 64px; height: 64px; border-radius: 50%; }
 .rc-pad .rc-btn.ok { background: var(--accent); color: #fff; }
+
+/* Panel táctil y búsqueda */
+.seg-small { margin: 0 auto; width: 220px; }
+.seg-small .seg-btn { padding: 7px 8px; font-size: 14px; }
+.touchpad {
+  position: relative; height: 210px; border-radius: 22px; background: var(--surface-2);
+  display: grid; place-items: center; touch-action: none; -webkit-user-select: none; user-select: none; cursor: grab;
+}
+.pad-hint { position: absolute; bottom: 12px; font-size: 12px; color: var(--muted); }
+.pad-arrow { font-size: 44px; color: var(--accent); opacity: 0; }
+.pad-arrow.pulse { animation: padpulse .45s ease-out; }
+@keyframes padpulse { from { opacity: 1; transform: scale(1.15); } to { opacity: 0; transform: scale(1); } }
+.search-box { display: flex; flex-direction: column; gap: 8px; }
+.search-box .add-row { margin: 0; }
 
 /* ---------- Conflictos ---------- */
 .conflict { margin-top: 12px; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }

@@ -21,7 +21,7 @@ const DEFAULTS = {
   almacen: [],        // [{id, name, qty, desc, roomId, locationId}]
   mejoras: [],        // [{id, name, desc, section, newSection, status, blockedReason, done, doneAt}]
   semanal: [],        // un elemento por día con algo escrito: [{id: 'AAAA-MM-DD', comida, cena}]
-  config: { rooms: [] },               // rooms: [{id, name, locations: [{id, name}]}]
+  config: { rooms: [] },               // rooms: [{id, name, code, pos: {floor, x, y}, locations: [{id, name}]}]
   mapa: { plan: null, devices: [] },   // futuro: devices [{id, name, kind, roomId, x, y, topic}]
 };
 
@@ -100,6 +100,11 @@ export function subscribe(s, fn) {
 
 export const rooms = () => (state.config && state.config.rooms) || [];
 
+// Código de habitación: lo que manda un sensor en "ubic". "Salón" -> "salon".
+export const slug = (name) => String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+export const roomCode = (r) => (r && (r.code || slug(r.name))) || '';
+
 // ---------- Estado de conexión ----------
 let raw = { text: 'sin configurar', ok: false };
 let status = raw;
@@ -169,14 +174,26 @@ let client = null;
 
 // ---------- Dispositivos (mandos): mensajes que no son secciones de datos ----------
 // Ej.: casa/chromecast/estado (retenido) y casa/chromecast/ack. No se guardan ni se fusionan.
+// Si el mensaje no es JSON (p. ej. "online"/"offline" de un nodo) llega como texto.
 const rawCache = new Map();
 const rawListeners = new Map();
+const prefixListeners = new Set();   // [{prefix, fn}]
 
 function onRawMessage(topic, payload) {
+  const text = payload.toString();
   let data;
-  try { data = JSON.parse(payload.toString()); } catch { return; }
+  try { data = JSON.parse(text); } catch { data = text; }
   rawCache.set(topic, data);
   (rawListeners.get(topic) || []).forEach((fn) => fn(data));
+  prefixListeners.forEach((l) => { if (topic.startsWith(l.prefix)) l.fn(topic, data); });
+}
+
+// Todos los temas que empiezan por prefix (p. ej. 'casa/sensor/'). fn(topic, data).
+export function onPrefix(prefix, fn) {
+  const l = { prefix, fn };
+  prefixListeners.add(l);
+  rawCache.forEach((data, topic) => { if (topic.startsWith(prefix)) fn(topic, data); });
+  return () => prefixListeners.delete(l);
 }
 
 export function onTopic(topic, fn) {
