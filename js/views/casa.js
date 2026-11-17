@@ -48,6 +48,13 @@ function wifiIcon(rssi) {
   return svg;
 }
 
+// Punto de rocío (fórmula de Magnus, error < 0,4 °C entre -45 y 60 °C).
+function dewPoint(t, rh) {
+  if (typeof t !== 'number' || typeof rh !== 'number' || rh <= 0) return null;
+  const g = Math.log(rh / 100) + (17.62 * t) / (243.12 + t);
+  return (243.12 * g) / (17.62 - g);
+}
+
 const reading = (d) => [`${num(tempOf(d))}°  ${num(humOf(d), 0)} %`, wifiIcon(d.rssi)];
 
 function ago(sec) {
@@ -181,6 +188,7 @@ export default function render(root, params) {
     sheet(r ? r.name : nodo, h('div', { class: 'kv-list' },
       line('Temperatura', `${num(tempOf(d), 2)} °C`),
       line('Humedad', `${num(humOf(d), 1)} %`),
+      line('Punto de rocío', `${num(dewPoint(tempOf(d), humOf(d)), 1)} °C`),
       line('Última lectura', `${when} (${ago(Date.now() / 1000 - ts)})`),
       line('Estado', s.estado === 'offline' ? 'desconectado' : (s.estado === 'online' ? 'conectado' : '–')),
       line('Nodo', nodo),

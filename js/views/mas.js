@@ -1,6 +1,7 @@
 import { h, icon } from '../ui.js';
 
-const ITEMS = [
+// El orden también es el del swipe entre pestañas (después de «Más»).
+export const ITEMS = [
   ['mandos', 'remote', 'Mandos'],
   ['semanal', 'plate', 'Menú semanal'],
   ['menu', 'utensils', 'Menú Trueba'],

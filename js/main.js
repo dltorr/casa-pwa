@@ -6,7 +6,7 @@ import casa from './views/casa.js';
 import tareas from './views/tareas.js';
 import batch from './views/batch.js';
 import calendario from './views/calendario.js';
-import mas from './views/mas.js';
+import mas, { ITEMS as MAS_ITEMS } from './views/mas.js';
 import compra from './views/compra.js';
 import almacen from './views/almacen.js';
 import ajustes from './views/ajustes.js';
@@ -68,12 +68,14 @@ store.onStatus((s) => {
 });
 
 let cleanup = null;
+let current = 'casa';
 
 function navigate() {
   const m = location.hash.match(/^#\/(\w+)(?:\?(.*))?$/);
   const name = m && ROUTES[m[1]] ? m[1] : 'casa';
   const params = new URLSearchParams((m && m[2]) || '');
   const route = ROUTES[name];
+  current = name;
 
   if (cleanup) cleanup();
   main.replaceChildren();
@@ -87,6 +89,53 @@ function navigate() {
 
   cleanup = route.view(main, params) || null;
 }
+
+// ---------- Swipe entre pestañas ----------
+// Orden: las de la barra inferior y, tras «Más», sus páginas en el orden de su lista.
+// Dedo de derecha a izquierda -> siguiente; de izquierda a derecha -> anterior. Sin vuelta al principio.
+const SWIPE_ORDER = [...TABS.map((t) => t[0]), ...MAS_ITEMS.map((i) => i[0])];
+// Zonas donde el dedo ya tiene otro uso: el touchpad del Chromecast, campos de texto,
+// el plano al colocar una habitación, zonas con scroll horizontal...
+const NO_SWIPE = 'input, textarea, select, .touchpad, .zoom-scroll, .diff, .plan.placing, [data-noswipe]';
+
+function scrollsHorizontally(el) {
+  for (; el && el !== document.body; el = el.parentElement) {
+    if (el.scrollWidth > el.clientWidth + 2) {
+      const ox = getComputedStyle(el).overflowX;
+      if (ox === 'auto' || ox === 'scroll') return true;
+    }
+  }
+  return false;
+}
+
+let sw = null;
+document.addEventListener('touchstart', (e) => {
+  sw = null;
+  if (e.touches.length !== 1 || document.querySelector('dialog[open]')) return;
+  const t = e.touches[0];
+  // Los bordes de la pantalla son del gesto «atrás» del sistema.
+  if (t.clientX < 24 || t.clientX > window.innerWidth - 24) return;
+  if (e.target.closest(NO_SWIPE) || scrollsHorizontally(e.target)) return;
+  sw = { x: t.clientX, y: t.clientY, t: Date.now() };
+}, { passive: true });
+
+document.addEventListener('touchend', (e) => {
+  if (!sw) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - sw.x;
+  const dy = t.clientY - sw.y;
+  const fast = Date.now() - sw.t < 700;
+  sw = null;
+  // Claramente horizontal y de al menos 70 px: un scroll vertical torcido no cuenta.
+  if (!fast || Math.abs(dx) < 70 || Math.abs(dx) < 2 * Math.abs(dy)) return;
+  const i = SWIPE_ORDER.indexOf(current);
+  const next = SWIPE_ORDER[i + (dx < 0 ? 1 : -1)];
+  if (i < 0 || !next) return;
+  main.dataset.enter = dx < 0 ? 'right' : 'left';
+  location.hash = '#/' + next;
+  setTimeout(() => { delete main.dataset.enter; }, 250);
+}, { passive: true });
+document.addEventListener('touchcancel', () => { sw = null; }, { passive: true });
 
 window.addEventListener('hashchange', navigate);
 navigate();
