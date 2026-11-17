@@ -23,11 +23,11 @@ const tempOf = (d) => (d.t ?? d.temp);
 const humOf = (d) => (d.h ?? d.hum);
 
 // WiFi: % aproximado a partir del RSSI. -50 dBm o mejor = 100 %, -100 dBm = 0 %.
-const wifiPct = (rssi) => (typeof rssi === 'number' ? Math.max(0, Math.min(100, 2 * (rssi + 100))) : null);
+export const wifiPct = (rssi) => (typeof rssi === 'number' ? Math.max(0, Math.min(100, 2 * (rssi + 100))) : null);
 
 // Icono de 4 rayas: se encienden en proporción al % (cada raya = 25 %).
 // 1 raya roja, 2 naranjas, 3 o 4 en el color normal (blanco en el mapa).
-function wifiIcon(rssi) {
+export function wifiIcon(rssi) {
   const pct = wifiPct(rssi);
   if (pct == null) return null;
   const bars = Math.ceil(pct / 25);

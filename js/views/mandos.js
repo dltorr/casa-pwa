@@ -1,9 +1,10 @@
-// Mandos: control de aparatos de casa. De momento, el Chromecast con Google TV.
+// Mandos: control de aparatos de casa: proyector (IR desde un ESP32) y Chromecast con Google TV.
 // La app manda órdenes por MQTT (casa/chromecast/cmd); el puente (ordenador o Raspberry
 // en casa) las pasa al Chromecast y responde con un "ack" para medir el retardo.
 
 import * as store from '../store.js';
 import { h, icon } from '../ui.js';
+import { wifiIcon, wifiPct } from './casa.js';
 
 const CMD = 'casa/chromecast/cmd';
 const ACK = 'casa/chromecast/ack';
@@ -216,10 +217,147 @@ function chromecastCard() {
   return { el: card, cleanup: () => { unsubAck(); unsubState(); } };
 }
 
+// ---------- Proyector ----------
+// El ESP32 emite el código IR del botón de encendido. El proyector no dice si está encendido:
+// el estado es el SUPUESTO tras la última orden. «Marcar» lo corrige sin emitir nada.
+const P_CMD = 'casa/proyector/cmd';
+const P_ACK = 'casa/proyector/ack';
+const P_STATE = 'casa/proyector/estado';
+
+// Interruptor deslizante: se arrastra la bola o se toca un lado. onChange(true|false) al soltar.
+function slideSwitch(onChange) {
+  const knob = h('span', { class: 'slide-knob' });
+  const track = h('div', { class: 'slide-track', role: 'switch', 'aria-checked': 'false', 'data-noswipe': '' },
+    h('span', { class: 'slide-label on' }, 'Encendido'),
+    h('span', { class: 'slide-label off' }, 'Apagado'),
+    knob);
+  let value = null;     // true | false | null (desconocido)
+  let drag = null;
+  let enabled = false;
+
+  const maxX = () => track.clientWidth - knob.offsetWidth - 8;
+  const place = (x, anim) => {
+    knob.style.transition = anim ? 'transform .2s ease' : 'none';
+    knob.style.transform = `translateX(${Math.max(0, Math.min(maxX(), x))}px)`;
+  };
+  const show = (v, anim = true) => {
+    track.classList.toggle('is-on', v === true);
+    track.classList.toggle('is-unknown', v === null);
+    track.setAttribute('aria-checked', String(v === true));
+    place(v === true ? maxX() : v === null ? maxX() / 2 : 0, anim);
+  };
+
+  track.addEventListener('pointerdown', (e) => {
+    if (!enabled) return;
+    track.setPointerCapture(e.pointerId);
+    const r = track.getBoundingClientRect();
+    drag = { x0: e.clientX, left: r.left, moved: false, start: value === true ? maxX() : value === null ? maxX() / 2 : 0 };
+  });
+  track.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x0;
+    if (Math.abs(dx) > 6) drag.moved = true;
+    if (drag.moved) place(drag.start + dx, false);
+  });
+  const end = (e) => {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    const want = d.moved
+      ? (d.start + (e.clientX - d.x0)) > maxX() / 2
+      : (e.clientX - d.left) > track.clientWidth / 2;   // toque: el lado tocado
+    if (want === value) { show(value); return; }
+    show(want);
+    onChange(want);
+  };
+  track.addEventListener('pointerup', end);
+  track.addEventListener('pointercancel', () => { if (drag) { drag = null; show(value); } });
+
+  return {
+    el: track,
+    set(v) { value = v; show(v); },
+    enable(on) { enabled = on; track.classList.toggle('disabled', !on); },
+  };
+}
+
+function projectorCard() {
+  const pending = new Map();
+  const dot = h('span', { class: 'dev-dot' });
+  const statusText = h('span', { class: 'dev-status' }, 'Sin datos del nodo');
+  const latency = h('span', { class: 'dev-latency' });
+  let power = null;
+  let online = false;
+  let rssi = null;
+  const wifiBox = h('span', { class: 'slide-wifi' });
+
+  function flash(msg) { latency.textContent = msg; latency.classList.add('err'); }
+
+  function send(payload, onFail) {
+    const id = Math.random().toString(36).slice(2, 9);
+    if (!store.publishRaw(P_CMD, { ...payload, id })) { flash('Sin conexión con el broker'); onFail(); return; }
+    latency.classList.remove('err');
+    latency.textContent = 'Enviando…';
+    pending.set(id, { t0: performance.now(), onFail });
+    // Apagar tarda ~1,5 s (dos pulsaciones): margen de sobra.
+    setTimeout(() => { const p = pending.get(id); if (p) { pending.delete(id); flash('El nodo no responde'); p.onFail(); } }, 6000);
+  }
+
+  const sw = slideSwitch((on) => send({ accion: on ? 'encender' : 'apagar' }, () => sw.set(power)));
+
+  const fix = h('button', { type: 'button', class: 'link-btn', hidden: true, onclick: () => {
+    const want = power !== true;
+    send({ accion: 'marcar', power: want ? 'on' : 'off' }, () => {});
+  } });
+
+  function paint() {
+    const ready = online;
+    sw.enable(ready);
+    const ic = ready ? wifiIcon(rssi) : null;
+    wifiBox.replaceChildren(...(ic ? [ic] : []));
+    wifiBox.title = ic ? `WiFi del nodo: ${wifiPct(rssi)} % (${rssi} dBm)` : '';
+    dot.className = 'dev-dot ' + (!ready ? 'off' : power ? 'on' : 'standby');
+    statusText.textContent = !ready ? 'Nodo desconectado'
+      : power === true ? 'Encendido (supuesto)' : power === false ? 'Apagado (supuesto)' : 'Estado desconocido';
+    fix.hidden = !ready;
+    fix.textContent = power === true ? '¿No coincide? Marcar como apagado' : '¿No coincide? Marcar como encendido';
+  }
+
+  const card = h('div', { class: 'card remote' },
+    h('div', { class: 'remote-head' },
+      dot,
+      h('div', { class: 'remote-title' }, h('span', { class: 'card-title' }, 'Proyector'), statusText),
+      latency),
+    h('div', { class: 'slide-row' }, sw.el, wifiBox),
+    h('p', { class: 'hint' }, 'Apagar envía dos pulsaciones (el proyector pide confirmar). Si usas el mando original, la app no se entera: corrígelo con el enlace de abajo.'),
+    fix);
+
+  const unsubAck = store.onTopic(P_ACK, (a) => {
+    const p = pending.get(a.id);
+    if (!p) return;
+    pending.delete(a.id);
+    if (a.ok) { latency.classList.remove('err'); latency.textContent = `${Math.round(performance.now() - p.t0)} ms`; }
+    else { flash(a.error || 'Error'); p.onFail(); }
+  });
+  const unsubState = store.onTopic(P_STATE, (s) => {
+    if (!s || typeof s !== 'object') return;
+    online = !!s.online;
+    rssi = typeof s.rssi === 'number' ? s.rssi : null;
+    if (s.power === 'on' || s.power === 'off') power = s.power === 'on';
+    else if (online) power = null;
+    sw.set(power);
+    paint();
+  });
+
+  paint();
+  return { el: card, cleanup: () => { unsubAck(); unsubState(); } };
+}
+
 export default function render(root) {
+  const pj = projectorCard();
   const cc = chromecastCard();
   root.append(h('div', { class: 'view' },
+    pj.el,
     cc.el,
-    h('p', { class: 'hint center' }, 'Proyector, pantalla y luz se añadirán aquí.')));
-  return cc.cleanup;
+    h('p', { class: 'hint center' }, 'Pantalla y luz se añadirán aquí.')));
+  return () => { pj.cleanup(); cc.cleanup(); };
 }
