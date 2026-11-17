@@ -416,29 +416,13 @@ dialog.zoom::backdrop { background: #000; }
 
 #main { overflow-x: clip; }
 
-/* ---------- Interruptor deslizante (proyector) ---------- */
-.slide-track {
-  position: relative; display: flex; align-items: center; justify-content: space-between;
-  height: 56px; margin: 14px 0 8px; padding: 0 22px; border-radius: 999px;
-  background: var(--surface-2); border: 1px solid var(--border);
-  touch-action: none; -webkit-user-select: none; user-select: none; cursor: pointer;
-  transition: background .2s;
-}
-.slide-track.is-on { background: var(--accent); border-color: var(--accent); }
-.slide-track.disabled { opacity: .45; cursor: not-allowed; }
-.slide-label { font-size: 15px; font-weight: 600; color: var(--muted); pointer-events: none; }
-.slide-track .slide-label.on { visibility: hidden; }
-.slide-track.is-on .slide-label.on { visibility: visible; color: #fff; }
-.slide-track.is-on .slide-label.off { visibility: hidden; }
-.slide-track.is-unknown .slide-label { visibility: hidden; }
-.slide-knob {
-  position: absolute; top: 4px; left: 4px; width: 48px; height: 48px; border-radius: 50%;
-  background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .3); pointer-events: none;
-}
-.link-btn { padding: 4px 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 14px; cursor: pointer; }
-.slide-row { display: flex; align-items: center; gap: 12px; margin: 14px 0 8px; }
-.slide-row .slide-track { flex: 1; margin: 0; }
-.slide-wifi { flex: none; display: inline-flex; color: var(--text); }
-.slide-wifi .wifi-bars { width: 26px; height: 21px; }
-.slide-wifi .wifi-bars rect { opacity: .15; }
-.slide-wifi .wifi-bars rect.on { opacity: 1; }
+/* ---------- Proyector: un botón grande ---------- */
+.rc-row.center { justify-content: center; }
+.rc-btn.power-big { width: 84px; height: 84px; border-radius: 50%; color: var(--danger); }
+.rc-btn.power-big .ico svg { width: 36px; height: 36px; }
+.rc-btn.power-big:active { background: var(--danger); color: #fff; }
+.rc-btn.power-big:disabled { opacity: .4; }
+.dev-wifi { flex: none; display: inline-flex; margin-left: auto; color: var(--text); }
+.dev-wifi .wifi-bars { width: 24px; height: 19px; }
+.dev-wifi .wifi-bars rect { opacity: .15; }
+.dev-wifi .wifi-bars rect.on { opacity: 1; }
