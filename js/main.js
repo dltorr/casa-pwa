@@ -88,6 +88,7 @@ function navigate() {
   tabEls.forEach(([r, a]) => (r === activeTab ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')));
 
   cleanup = route.view(main, params) || null;
+  slideIn();
 }
 
 // ---------- Swipe entre pestañas ----------
@@ -108,34 +109,76 @@ function scrollsHorizontally(el) {
   return false;
 }
 
-let sw = null;
+// El contenido sigue al dedo mientras se arrastra. Al soltar: si se pasa de un cuarto de
+// pantalla (o es un golpe rápido) la vista sale por ese lado y la nueva entra por el otro;
+// si no, vuelve a su sitio. En los extremos (Casa / Ajustes) se arrastra con resistencia.
+let drag = null;
+let enterFrom = 0;   // -1 / 1: la próxima vista entra desde la derecha / izquierda
+
+const slide = (x, ms, ease = 'ease-out') => {
+  main.style.transition = ms ? `transform ${ms}ms ${ease}` : 'none';
+  main.style.transform = x ? `translateX(${x}px)` : '';
+};
+const neighbour = (dx) => {
+  const i = SWIPE_ORDER.indexOf(current);
+  return i < 0 ? null : SWIPE_ORDER[i + (dx < 0 ? 1 : -1)] || null;
+};
+
 document.addEventListener('touchstart', (e) => {
-  sw = null;
+  drag = null;
   if (e.touches.length !== 1 || document.querySelector('dialog[open]')) return;
   const t = e.touches[0];
   // Los bordes de la pantalla son del gesto «atrás» del sistema.
   if (t.clientX < 24 || t.clientX > window.innerWidth - 24) return;
   if (e.target.closest(NO_SWIPE) || scrollsHorizontally(e.target)) return;
-  sw = { x: t.clientX, y: t.clientY, t: Date.now() };
+  drag = { x: t.clientX, y: t.clientY, t: Date.now(), dir: null, dx: 0 };
 }, { passive: true });
 
-document.addEventListener('touchend', (e) => {
-  if (!sw) return;
-  const t = e.changedTouches[0];
-  const dx = t.clientX - sw.x;
-  const dy = t.clientY - sw.y;
-  const fast = Date.now() - sw.t < 700;
-  sw = null;
-  // Claramente horizontal y de al menos 70 px: un scroll vertical torcido no cuenta.
-  if (!fast || Math.abs(dx) < 70 || Math.abs(dx) < 2 * Math.abs(dy)) return;
-  const i = SWIPE_ORDER.indexOf(current);
-  const next = SWIPE_ORDER[i + (dx < 0 ? 1 : -1)];
-  if (i < 0 || !next) return;
-  main.dataset.enter = dx < 0 ? 'right' : 'left';
-  location.hash = '#/' + next;
-  setTimeout(() => { delete main.dataset.enter; }, 250);
+// No pasivo: cuando el gesto es horizontal se bloquea el scroll vertical de la página.
+document.addEventListener('touchmove', (e) => {
+  if (!drag) return;
+  const t = e.touches[0];
+  const dx = t.clientX - drag.x;
+  const dy = t.clientY - drag.y;
+  if (!drag.dir) {
+    if (Math.abs(dx) > 10 && Math.abs(dx) > 1.5 * Math.abs(dy)) drag.dir = 'h';
+    else if (Math.abs(dy) > 10) { drag = null; return; }   // es un scroll: no se toca
+    else return;
+  }
+  e.preventDefault();
+  drag.dx = dx;
+  slide(neighbour(dx) ? dx : dx * 0.25, 0);
+}, { passive: false });
+
+document.addEventListener('touchend', () => {
+  if (!drag) return;
+  const { dx, dir, t } = drag;
+  drag = null;
+  if (dir !== 'h') return;
+  const next = neighbour(dx);
+  const w = window.innerWidth;
+  const v = Math.abs(dx) / Math.max(1, Date.now() - t);   // px/ms
+  if (next && (Math.abs(dx) > w * 0.25 || (v > 0.5 && Math.abs(dx) > 40))) {
+    const sign = dx < 0 ? -1 : 1;
+    slide(sign * w, 160, 'ease-in');
+    setTimeout(() => { enterFrom = sign; location.hash = '#/' + next; }, 160);
+  } else {
+    slide(0, 200);
+  }
 }, { passive: true });
-document.addEventListener('touchcancel', () => { sw = null; }, { passive: true });
+
+document.addEventListener('touchcancel', () => { if (drag) { drag = null; slide(0, 200); } }, { passive: true });
+
+// Llamado al terminar de pintar una vista: si venimos de un swipe, entra deslizándose.
+function slideIn() {
+  if (!enterFrom) { slide(0, 0); return; }
+  const from = -enterFrom * window.innerWidth;
+  enterFrom = 0;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { slide(0, 0); return; }
+  slide(from, 0);
+  main.getBoundingClientRect();   // fuerza el reflow para que arranque desde fuera
+  slide(0, 220);
+}
 
 window.addEventListener('hashchange', navigate);
 navigate();

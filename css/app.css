@@ -401,10 +401,6 @@ dialog.zoom::backdrop { background: #000; }
 
 /* test */
 
-/* ---------- Swipe entre pestañas: la vista nueva entra desde el lado del dedo ---------- */
-#main[data-enter="right"] > * { animation: enter-right .2s ease-out; }
-#main[data-enter="left"] > * { animation: enter-left .2s ease-out; }
-@keyframes enter-right { from { transform: translateX(40px); opacity: .4; } }
-@keyframes enter-left { from { transform: translateX(-40px); opacity: .4; } }
-@media (prefers-reduced-motion: reduce) { #main[data-enter] > * { animation: none; } }
+/* Swipe entre pestañas: el desplazamiento lo pone main.js en #main (transform). */
+
 #main { overflow-x: clip; }
