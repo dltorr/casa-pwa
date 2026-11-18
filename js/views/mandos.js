@@ -272,7 +272,7 @@ const AIR_MODES = [
   ['cool', 'snow', 'Frío'], ['dry', 'drops', 'Seco'], ['fan', 'fan', 'Ventilar'],
   ['heat', 'sun', 'Calor'], ['auto', 'acauto', 'Auto'],
 ];
-const AIR_FANS = [[0, 'Auto'], [1, '1'], [2, '2'], [3, '3']];
+const AIR_FANS = [[0, 'Auto'], [1, 'Bajo'], [2, 'Medio'], [3, 'Alto']];
 
 function airCard() {
   const st = { power: false, mode: 'cool', temp: 25, fan: 0 };
@@ -304,7 +304,30 @@ function airCard() {
   const modeBtns = AIR_MODES.map(([id, ic, label]) => h('button', {
     type: 'button', class: 'mode-btn', 'data-mode': id, onclick: () => change({ mode: id }),
   }, icon(ic), h('span', {}, label)));
-  const tempVal = h('span', { class: 'temp-val' });
+  // Temperatura: tocar el número abre el teclado numérico. Fuera de 16-30 se ajusta al límite.
+  const tempVal = h('button', { type: 'button', class: 'temp-val', 'aria-label': 'Escribir temperatura', onclick: () => editTemp() });
+  const tempInput = h('input', { type: 'number', inputmode: 'numeric', min: '16', max: '30', step: '1', class: 'temp-input', hidden: true, 'aria-label': 'Temperatura' });
+  function editTemp() {
+    tempInput.value = String(st.temp);
+    tempVal.hidden = true;
+    tempInput.hidden = false;
+    tempInput.focus();
+    tempInput.select();
+  }
+  function commitTemp() {
+    if (tempInput.hidden) return;
+    tempInput.hidden = true;
+    tempVal.hidden = false;
+    const n = Math.round(Number(tempInput.value));
+    if (tempInput.value.trim() === '' || !Number.isFinite(n)) { paint(); return; }
+    const t = Math.min(30, Math.max(16, n));
+    if (t !== st.temp) change({ temp: t }, true); else paint();
+  }
+  tempInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commitTemp(); }
+    if (e.key === 'Escape') { tempInput.value = ''; commitTemp(); }
+  });
+  tempInput.addEventListener('blur', commitTemp);
   const minus = h('button', { type: 'button', class: 'rc-btn', 'aria-label': 'Bajar temperatura', onclick: () => change({ temp: Math.max(16, st.temp - 1) }) }, icon('minus'));
   const plus = h('button', { type: 'button', class: 'rc-btn', 'aria-label': 'Subir temperatura', onclick: () => change({ temp: Math.min(30, st.temp + 1) }) }, icon('plus'));
   const fanBtns = AIR_FANS.map(([v, label]) => h('button', { type: 'button', class: 'seg-btn', onclick: () => change({ fan: v }) }, label));
@@ -323,16 +346,20 @@ function airCard() {
     modeBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === st.mode)));
     fanBtns.forEach((b, i) => b.setAttribute('aria-selected', String(AIR_FANS[i][0] === st.fan)));
     tempVal.textContent = `${st.temp} °C`;
-    [powerBtn, minus, plus, ...modeBtns, ...fanBtns].forEach((b) => { b.disabled = !ready; });
+    [powerBtn, minus, plus, tempVal, ...modeBtns, ...fanBtns].forEach((b) => { b.disabled = !ready; });
     body.classList.toggle('is-off', !st.power);
   }
 
   const body = h('div', { class: 'air-body' },
     h('div', { class: 'air-top' },
       powerBtn,
-      h('div', { class: 'temp-box' }, minus, tempVal, plus)),
+      h('div', { class: 'temp-box' }, minus, tempVal, tempInput, plus)),
     h('div', { class: 'mode-row' }, ...modeBtns),
-    h('div', { class: 'seg seg-fan', role: 'tablist', 'aria-label': 'Ventilador' }, ...fanBtns));
+    h('div', { class: 'fan-box' },
+      h('span', { class: 'fan-label' }, 'Ventilador'),
+      h('div', { class: 'fan-row' },
+        h('span', { class: 'fan-ico', 'aria-hidden': 'true' }, icon('fan')),
+        h('div', { class: 'seg seg-fan', role: 'tablist', 'aria-label': 'Velocidad del ventilador' }, ...fanBtns))));
 
   const card = h('div', { class: 'card remote' },
     h('div', { class: 'remote-head' },
