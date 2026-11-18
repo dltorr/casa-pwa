@@ -263,12 +263,110 @@ function projectorCard() {
   return { el: card, cleanup: unsubState };
 }
 
+// ---------- Aire acondicionado (Argo, IR GREE desde un ESP32) ----------
+// Cada orden manda el ESTADO COMPLETO (como su mando), así que la app y el aire no se
+// desincronizan. Si alguien usa el mando original, el ESP32 lo lee y publica el estado.
+const A_CMD = 'casa/aire/cmd';
+const A_STATE = 'casa/aire/estado';
+const AIR_MODES = [
+  ['cool', 'snow', 'Frío'], ['dry', 'drops', 'Seco'], ['fan', 'fan', 'Ventilar'],
+  ['heat', 'sun', 'Calor'], ['auto', 'acauto', 'Auto'],
+];
+const AIR_FANS = [[0, 'Auto'], [1, '1'], [2, '2'], [3, '3']];
+
+function airCard() {
+  const st = { power: false, mode: 'cool', temp: 25, fan: 0 };
+  let online = false;
+  let rssi = null;
+  let known = false;      // ya llegó algún estado del nodo
+  let lastLocal = 0;      // último cambio hecho aquí (para no pisarlo con un estado viejo)
+  let timer = null;
+
+  const dot = h('span', { class: 'dev-dot' });
+  const statusText = h('span', { class: 'dev-status' }, 'Sin datos del nodo');
+  const wifiBox = h('span', { class: 'dev-wifi' });
+
+  function send() {
+    clearTimeout(timer);
+    timer = null;
+    store.publishRaw(A_CMD, { ...st, id: Math.random().toString(36).slice(2, 9) });
+  }
+  // Encender/apagar va al momento; temperatura, modo y ventilador esperan medio segundo
+  // por si se pulsan varias veces seguidas (+ + +): se manda solo el estado final.
+  function change(patch, now) {
+    Object.assign(st, patch);
+    lastLocal = Date.now();
+    paint();
+    if (now) send(); else { clearTimeout(timer); timer = setTimeout(send, 500); }
+  }
+
+  const powerBtn = h('button', { type: 'button', class: 'rc-btn power-ac', 'aria-label': 'Encender / apagar aire', onclick: () => change({ power: !st.power }, true) }, icon('power'));
+  const modeBtns = AIR_MODES.map(([id, ic, label]) => h('button', {
+    type: 'button', class: 'mode-btn', 'data-mode': id, onclick: () => change({ mode: id }),
+  }, icon(ic), h('span', {}, label)));
+  const tempVal = h('span', { class: 'temp-val' });
+  const minus = h('button', { type: 'button', class: 'rc-btn', 'aria-label': 'Bajar temperatura', onclick: () => change({ temp: Math.max(16, st.temp - 1) }) }, icon('minus'));
+  const plus = h('button', { type: 'button', class: 'rc-btn', 'aria-label': 'Subir temperatura', onclick: () => change({ temp: Math.min(30, st.temp + 1) }) }, icon('plus'));
+  const fanBtns = AIR_FANS.map(([v, label]) => h('button', { type: 'button', class: 'seg-btn', onclick: () => change({ fan: v }) }, label));
+
+  const modeLabel = () => (AIR_MODES.find((m) => m[0] === st.mode) || [])[2] || '';
+
+  function paint() {
+    const ready = online && known;
+    dot.className = 'dev-dot ' + (!online ? 'off' : st.power ? 'on' : 'standby');
+    statusText.textContent = !online ? (known ? 'Nodo desconectado' : 'Sin datos del nodo')
+      : st.power ? `${modeLabel()} · ${st.temp} °C` : 'Apagado';
+    const ic = online ? wifiIcon(rssi) : null;
+    wifiBox.replaceChildren(...(ic ? [ic] : []));
+    wifiBox.title = ic ? `WiFi del nodo: ${wifiPct(rssi)} % (${rssi} dBm)` : '';
+    powerBtn.classList.toggle('is-on', st.power);
+    modeBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === st.mode)));
+    fanBtns.forEach((b, i) => b.setAttribute('aria-selected', String(AIR_FANS[i][0] === st.fan)));
+    tempVal.textContent = `${st.temp} °C`;
+    [powerBtn, minus, plus, ...modeBtns, ...fanBtns].forEach((b) => { b.disabled = !ready; });
+    body.classList.toggle('is-off', !st.power);
+  }
+
+  const body = h('div', { class: 'air-body' },
+    h('div', { class: 'air-top' },
+      powerBtn,
+      h('div', { class: 'temp-box' }, minus, tempVal, plus)),
+    h('div', { class: 'mode-row' }, ...modeBtns),
+    h('div', { class: 'seg seg-fan', role: 'tablist', 'aria-label': 'Ventilador' }, ...fanBtns));
+
+  const card = h('div', { class: 'card remote' },
+    h('div', { class: 'remote-head' },
+      dot,
+      h('div', { class: 'remote-title' }, h('span', { class: 'card-title' }, 'Aire'), statusText),
+      wifiBox),
+    body);
+
+  const unsub = store.onTopic(A_STATE, (s) => {
+    if (!s || typeof s !== 'object') return;
+    online = !!s.online;
+    if (typeof s.rssi === 'number') rssi = s.rssi;
+    if (typeof s.mode === 'string') {
+      known = true;
+      // Un estado del mando manda siempre; uno de la app se ignora si aquí hay un cambio más nuevo.
+      if (s.origen === 'mando' || (!timer && Date.now() - lastLocal > 1500)) {
+        st.power = !!s.power; st.mode = s.mode; st.temp = s.temp; st.fan = s.fan;
+      }
+    }
+    paint();
+  });
+
+  paint();
+  return { el: card, cleanup: () => { unsub(); if (timer) send(); } };
+}
+
 export default function render(root) {
   const pj = projectorCard();
+  const air = airCard();
   const cc = chromecastCard();
   root.append(h('div', { class: 'view' },
     pj.el,
+    air.el,
     cc.el,
     h('p', { class: 'hint center' }, 'Pantalla y luz se añadirán aquí.')));
-  return () => { pj.cleanup(); cc.cleanup(); };
+  return () => { pj.cleanup(); air.cleanup(); cc.cleanup(); };
 }

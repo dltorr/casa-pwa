@@ -426,3 +426,24 @@ dialog.zoom::backdrop { background: #000; }
 .dev-wifi .wifi-bars { width: 24px; height: 19px; }
 .dev-wifi .wifi-bars rect { opacity: .15; }
 .dev-wifi .wifi-bars rect.on { opacity: 1; }
+
+/* ---------- Aire acondicionado ---------- */
+.air-body { display: flex; flex-direction: column; gap: 14px; margin-top: 12px; }
+.air-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.rc-btn.power-ac { width: 64px; height: 64px; border-radius: 50%; color: var(--muted); }
+.rc-btn.power-ac.is-on { background: var(--accent); color: #fff; }
+.rc-btn.power-ac .ico svg { width: 30px; height: 30px; }
+.temp-box { display: flex; align-items: center; gap: 10px; }
+.temp-val { min-width: 92px; text-align: center; font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mode-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.mode-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 2px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+  color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.mode-btn .ico svg { width: 24px; height: 24px; }
+.mode-btn[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.mode-btn:active { transform: scale(.96); }
+.seg.seg-fan { grid-template-columns: repeat(4, 1fr); margin: 0; }
+.air-body button:disabled { opacity: .4; cursor: not-allowed; }
+.air-body.is-off .temp-val, .air-body.is-off .mode-btn[aria-pressed="true"] { opacity: .5; }
