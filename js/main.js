@@ -93,7 +93,7 @@ function navigate() {
 
 // ---------- Swipe entre pestañas ----------
 // Orden: las de la barra inferior y, tras «Más», sus páginas en el orden de su lista.
-// Dedo de derecha a izquierda -> siguiente; de izquierda a derecha -> anterior. Sin vuelta al principio.
+// Dedo de derecha a izquierda -> siguiente; de izquierda a derecha -> anterior.
 const SWIPE_ORDER = [...TABS.map((t) => t[0]), ...MAS_ITEMS.map((i) => i[0])];
 // Zonas donde el dedo ya tiene otro uso: el touchpad del Chromecast, campos de texto,
 // el plano al colocar una habitación, zonas con scroll horizontal...
@@ -111,7 +111,7 @@ function scrollsHorizontally(el) {
 
 // El contenido sigue al dedo mientras se arrastra. Al soltar: si se pasa de un cuarto de
 // pantalla (o es un golpe rápido) la vista sale por ese lado y la nueva entra por el otro;
-// si no, vuelve a su sitio. En los extremos (Casa / Ajustes) se arrastra con resistencia.
+// si no, vuelve a su sitio. Es cíclico: desde Casa hacia atrás se va a Ajustes y viceversa.
 let drag = null;
 let enterFrom = 0;   // -1 / 1: la próxima vista entra desde la derecha / izquierda
 
@@ -121,7 +121,9 @@ const slide = (x, ms, ease = 'ease-out') => {
 };
 const neighbour = (dx) => {
   const i = SWIPE_ORDER.indexOf(current);
-  return i < 0 ? null : SWIPE_ORDER[i + (dx < 0 ? 1 : -1)] || null;
+  if (i < 0) return null;
+  const n = SWIPE_ORDER.length;
+  return SWIPE_ORDER[(i + (dx < 0 ? 1 : -1) + n) % n];   // cíclico: tras Ajustes vuelve a Casa
 };
 
 document.addEventListener('touchstart', (e) => {
