@@ -217,50 +217,97 @@ function chromecastCard() {
   return { el: card, cleanup: () => { unsubAck(); unsubState(); } };
 }
 
-// ---------- Proyector ----------
-// El ESP32 emite el código IR del botón de encendido. Un solo botón que SIEMPRE manda
-// 2 pulsos con 1,5 s entre ellos: al apagar, el segundo confirma; al encender, el
-// proyector ignora el segundo. Así no hace falta saber si está encendido.
-// (De momento se usa la orden "apagar" del firmware, que ya hace los 2 pulsos.)
+// ---------- Cine: proyector (IR) + pantalla (RF 433) ----------
+// Botón principal: «Empezar cine» baja la pantalla y enciende el proyector; «Acabar cine»
+// sube la pantalla y apaga el proyector. El proyector siempre recibe 2 pulsos (al apagar,
+// el 2.º confirma; al encender lo ignora). Si está puesto se guarda RETENIDO en
+// casa/cine/estado, así los dos móviles ven lo mismo.
+// «Controles por separado»: proyector y pantalla sueltos, para corregir desajustes;
+// NO cambian el estado del botón principal.
 const P_CMD = 'casa/proyector/cmd';
 const P_STATE = 'casa/proyector/estado';
+const S_CMD = 'casa/pantalla/cmd';
+const S_STATE = 'casa/pantalla/estado';
+const CINE_STATE = 'casa/cine/estado';
 
-function projectorCard() {
+const newId = () => Math.random().toString(36).slice(2, 9);
+
+function cineCard() {
+  const nodes = { proyector: { online: false, rssi: null, known: false }, pantalla: { online: false, rssi: null, known: false } };
+  let activo = false;
+
   const dot = h('span', { class: 'dev-dot' });
-  const statusText = h('span', { class: 'dev-status' }, 'Sin datos del nodo');
-  const wifiBox = h('span', { class: 'dev-wifi' });
-  let online = false;
-  let rssi = null;
+  const statusText = h('span', { class: 'dev-status' });
+  const nodeLine = h('div', { class: 'cine-nodes' });
 
-  const btn = h('button', {
-    type: 'button', class: 'rc-btn power-big', 'aria-label': 'Encender / apagar proyector', title: 'Encender / apagar',
-    onclick: () => store.publishRaw(P_CMD, { accion: 'apagar', id: Math.random().toString(36).slice(2, 9) }),
-  }, icon('power'));
+  const proyector = () => store.publishRaw(P_CMD, { accion: 'apagar', id: newId() });   // = 2 pulsos
+  const pantalla = (accion) => store.publishRaw(S_CMD, { accion, id: newId() });
+
+  const mainBtn = h('button', {
+    type: 'button', class: 'cine-main',
+    onclick: () => {
+      const empezar = !activo;
+      pantalla(empezar ? 'bajar' : 'subir');
+      proyector();
+      activo = empezar;
+      store.publishRaw(CINE_STATE, { activo, por: store.getUserName(), ts: Date.now() }, { retain: true });
+      paint();
+    },
+  });
+
+  const projBtn = h('button', { type: 'button', class: 'rc-btn power-sm', 'aria-label': 'Encender / apagar proyector', onclick: proyector }, icon('power'));
+  const upBtn = h('button', { type: 'button', class: 'rc-btn wide', onclick: () => pantalla('subir') }, icon('chup'), 'Subir');
+  const downBtn = h('button', { type: 'button', class: 'rc-btn wide', onclick: () => pantalla('bajar') }, icon('chdown'), 'Bajar');
+
+  const sep = h('details', { class: 'cine-sep' },
+    h('summary', {}, 'Controles por separado'),
+    h('div', { class: 'cine-sep-body' },
+      h('div', { class: 'cine-sep-row' }, h('span', {}, 'Proyector'), projBtn),
+      h('div', { class: 'cine-sep-row' }, h('span', {}, 'Pantalla'), h('div', { class: 'cine-sep-btns' }, upBtn, downBtn))));
+
+  function nodeTag(name, label) {
+    const n = nodes[name];
+    const ic = n.online ? wifiIcon(n.rssi) : null;
+    return h('span', { class: 'cine-node' + (n.online ? '' : ' off'), title: ic ? `WiFi: ${wifiPct(n.rssi)} % (${n.rssi} dBm)` : '' },
+      label, ic || h('span', { class: 'cine-off' }, n.known ? 'desconectado' : 'sin datos'));
+  }
 
   function paint() {
-    btn.disabled = !online;
-    dot.className = 'dev-dot ' + (online ? 'on' : 'off');
-    statusText.textContent = online ? 'Conectado' : 'Nodo desconectado';
-    const ic = online ? wifiIcon(rssi) : null;
-    wifiBox.replaceChildren(...(ic ? [ic] : []));
-    wifiBox.title = ic ? `WiFi del nodo: ${wifiPct(rssi)} % (${rssi} dBm)` : '';
+    const p = nodes.proyector.online;
+    const s = nodes.pantalla.online;
+    dot.className = 'dev-dot ' + (p && s ? (activo ? 'on' : 'standby') : (p || s ? 'standby' : 'off'));
+    statusText.textContent = !(p && s) ? (p || s ? 'Falta un nodo' : 'Nodos desconectados') : (activo ? 'Cine puesto' : 'Apagado');
+    nodeLine.replaceChildren(nodeTag('proyector', 'Proyector'), nodeTag('pantalla', 'Pantalla'));
+    mainBtn.textContent = activo ? 'Acabar cine' : 'Empezar cine';
+    mainBtn.classList.toggle('is-on', activo);
+    mainBtn.disabled = !(p && s);   // a medias no: haría solo una de las dos cosas
+    projBtn.disabled = !p;
+    upBtn.disabled = downBtn.disabled = !s;
   }
 
   const card = h('div', { class: 'card remote' },
     h('div', { class: 'remote-head' },
       dot,
-      h('div', { class: 'remote-title' }, h('span', { class: 'card-title' }, 'Proyector'), statusText),
-      wifiBox),
-    h('div', { class: 'rc-row center' }, btn));
+      h('div', { class: 'remote-title' }, h('span', { class: 'card-title' }, 'Cine'), statusText)),
+    nodeLine,
+    mainBtn,
+    sep);
 
-  const unsubState = store.onTopic(P_STATE, (s) => {
-    if (!s || typeof s !== 'object') return;
-    online = !!s.online;
-    rssi = typeof s.rssi === 'number' ? s.rssi : null;
+  const onNode = (name) => (st) => {
+    if (!st || typeof st !== 'object') return;
+    nodes[name].known = true;
+    nodes[name].online = !!st.online;
+    if (typeof st.rssi === 'number') nodes[name].rssi = st.rssi;
     paint();
-  });
+  };
+  const unsubs = [
+    store.onTopic(P_STATE, onNode('proyector')),
+    store.onTopic(S_STATE, onNode('pantalla')),
+    store.onTopic(CINE_STATE, (c) => { if (c && typeof c === 'object') { activo = !!c.activo; paint(); } }),
+  ];
 
-  return { el: card, cleanup: unsubState };
+  paint();
+  return { el: card, cleanup: () => unsubs.forEach((u) => u()) };
 }
 
 // ---------- Aire acondicionado (Argo, IR GREE desde un ESP32) ----------
@@ -387,13 +434,13 @@ function airCard() {
 }
 
 export default function render(root) {
-  const pj = projectorCard();
+  const pj = cineCard();
   const air = airCard();
   const cc = chromecastCard();
   root.append(h('div', { class: 'view' },
     pj.el,
     air.el,
     cc.el,
-    h('p', { class: 'hint center' }, 'Pantalla y luz se añadirán aquí.')));
+    h('p', { class: 'hint center' }, 'La luz se añadirá aquí.')));
   return () => { pj.cleanup(); air.cleanup(); cc.cleanup(); };
 }

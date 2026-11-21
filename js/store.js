@@ -204,9 +204,10 @@ export function onTopic(topic, fn) {
 }
 
 // Envía una orden a un dispositivo. Devuelve false si no hay conexión con el broker.
-export function publishRaw(topic, data) {
+// opts.retain: el broker guarda el último (estado compartido entre móviles).
+export function publishRaw(topic, data, opts = {}) {
   if (!client || !client.connected) return false;
-  client.publish(topic, JSON.stringify(data), { qos: 0, retain: false });
+  client.publish(topic, JSON.stringify(data), { qos: opts.retain ? 1 : 0, retain: !!opts.retain });
   return true;
 }
 
