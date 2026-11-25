@@ -106,7 +106,7 @@ function nameForm() {
 
 // Pestañas de este móvil: tarjetas que se ordenan arrastrando el asa (≡) o con las
 // flechas, y un interruptor para mostrarlas u ocultarlas. Las 4 primeras activas van a la
-// barra inferior (llevan la marca «Barra»); el resto, dentro de «Más».
+// barra inferior (se ven en azul); el resto, dentro de «Más».
 function tabsPanel() {
   const list = h('div', { class: 'tabs-list', 'data-noswipe': '' });
 
@@ -131,7 +131,6 @@ function tabsPanel() {
     const el = h('div', { class: 'tab-card' + (bar ? ' in-bar' : '') + (hidden ? ' is-hidden' : ''), 'data-route': route },
       handle,
       h('span', { class: 'tab-row-name' }, icon(ic), h('span', {}, label)),
-      bar ? h('span', { class: 'tab-badge' }, 'Barra') : null,
       h('span', { class: 'tab-arrows' },
         h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Subir ' + label, disabled: i === 0, onclick: () => move(route, -1) }, icon('chup')),
         h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Bajar ' + label, disabled: i === total - 1, onclick: () => move(route, 1) }, icon('chdown'))),
@@ -201,7 +200,7 @@ function tabsPanel() {
 
   const el = h('div', { class: 'panel' },
     h('p', { class: 'hint tabs-hint' },
-      `Solo en este móvil. Las ${BAR_SIZE} primeras activas (marca «Barra») salen abajo; el resto, dentro de «Más». `
+      `Solo en este móvil. Las ${BAR_SIZE} primeras activas (en azul) salen abajo; el resto, dentro de «Más». `
       + 'Ordénalas arrastrando ≡ o con las flechas. Las ocultas no salen en ningún sitio, pero sus datos se siguen guardando.'),
     list);
   return { el, unsub };
