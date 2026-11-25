@@ -140,44 +140,61 @@ function tabsPanel() {
     return el;
   }
 
-  // Arrastre con el asa: la tarjeta sigue al dedo y las demás se apartan al cruzar su mitad.
+  // Arrastre con el asa: solo se mueve la tarjeta que va en el dedo; una línea marca dónde
+  // caerá. El orden se calcula y se guarda AL SOLTAR. Si el sistema interrumpe el gesto
+  // (pointercancel, p. ej. Safari decide hacer scroll), se cancela y no se guarda nada.
+  const dropLine = h('div', { class: 'tab-drop', hidden: true });
   function dragFrom(handle, el) {
     handle.addEventListener('pointerdown', (e) => {
+      if (e.button > 0) return;
       e.preventDefault();
-      handle.setPointerCapture(e.pointerId);
+      try { handle.setPointerCapture(e.pointerId); } catch { /* sin captura */ }
+      const cards = [...list.querySelectorAll('.tab-card')];
+      const others = cards.filter((c) => c !== el);
+      const listTop = list.getBoundingClientRect().top;
+      // Posiciones fijas tomadas al empezar: durante el arrastre no cambia el orden de nada.
+      const mids = others.map((c) => { const r = c.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, mid: r.top + r.height / 2 }; });
+      const r0 = el.getBoundingClientRect();
       const startY = e.clientY;
-      const top0 = el.offsetTop;
+      let target = cards.indexOf(el);
       el.classList.add('dragging');
+
       const onMove = (ev) => {
         const dy = ev.clientY - startY;
         el.style.transform = `translateY(${dy}px)`;
-        const mid = top0 + dy + el.offsetHeight / 2;
-        const others = [...list.children].filter((c) => c !== el);
-        const before = others.find((c) => mid < c.offsetTop + c.offsetHeight / 2);
-        const ref = before || null;
-        if (el.nextSibling !== ref) {
-          list.insertBefore(el, ref);
-          el.style.transform = `translateY(${top0 + dy - el.offsetTop}px)`;
-        }
+        const mid = r0.top + r0.height / 2 + dy;
+        target = mids.filter((m) => m.mid < mid).length;   // cuántas quedan por encima
+        // Línea entre la tarjeta «target-1» y la «target» (de las demás)
+        const y = target === 0 ? mids[0].top - 5
+          : target >= mids.length ? mids[mids.length - 1].bottom + 3
+            : (mids[target - 1].bottom + mids[target].top) / 2 - 1;
+        dropLine.style.top = (y - listTop) + 'px';
+        dropLine.hidden = false;
       };
-      const onUp = () => {
+      const end = (save) => {
         handle.removeEventListener('pointermove', onMove);
         handle.removeEventListener('pointerup', onUp);
-        handle.removeEventListener('pointercancel', onUp);
+        handle.removeEventListener('pointercancel', onCancel);
         el.classList.remove('dragging');
         el.style.transform = '';
-        setOrder([...list.children].map((c) => c.dataset.route));
+        dropLine.hidden = true;
+        if (!save) return;
+        const routes = others.map((c) => c.dataset.route);
+        routes.splice(target, 0, el.dataset.route);
+        if (routes.join() !== cards.map((c) => c.dataset.route).join()) setOrder(routes);
       };
+      const onUp = () => end(true);
+      const onCancel = () => end(false);
       handle.addEventListener('pointermove', onMove);
       handle.addEventListener('pointerup', onUp);
-      handle.addEventListener('pointercancel', onUp);
+      handle.addEventListener('pointercancel', onCancel);
     });
   }
 
   function paint() {
     const o = order();
     const bar = new Set(barRoutes());
-    list.replaceChildren(...o.map((r, i) => card(r, i, o.length, bar.has(r))));
+    list.replaceChildren(...o.map((r, i) => card(r, i, o.length, bar.has(r))), dropLine);
   }
   paint();
   const unsub = onTabsChange(paint);

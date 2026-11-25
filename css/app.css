@@ -494,14 +494,15 @@ dialog.zoom::backdrop { background: #000; }
 
 /* ---------- Ajustes: pestañas (orden y visibles) ---------- */
 .tabs-hint { margin: 0 0 14px; }
-.tabs-list { display: flex; flex-direction: column; gap: 8px; }
+.tabs-list { position: relative; display: flex; flex-direction: column; gap: 8px; }
+.tab-drop { position: absolute; left: 4px; right: 4px; height: 3px; border-radius: 3px; background: var(--accent); pointer-events: none; }
 .tab-card {
   position: relative; display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 4px;
   border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
 }
 .tab-card.in-bar { border-color: var(--accent); background: var(--accent-soft); }
 .tab-card.is-hidden .tab-row-name { opacity: .45; }
-.tab-card.dragging { z-index: 5; box-shadow: 0 8px 20px rgba(0, 0, 0, .18); transition: none; }
+.tab-card.dragging { z-index: 5; box-shadow: 0 8px 20px rgba(0, 0, 0, .18); opacity: .92; }
 .tab-handle { flex: none; padding: 8px 10px; font-size: 22px; line-height: 1; color: var(--muted); cursor: grab; touch-action: none; user-select: none; }
 .tab-row-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
 .tab-row-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
