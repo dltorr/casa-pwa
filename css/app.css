@@ -492,12 +492,24 @@ dialog.zoom::backdrop { background: #000; }
 .rc-btn.power-sm:active { background: var(--danger); color: #fff; }
 .cine-sep button:disabled { opacity: .4; cursor: not-allowed; }
 
-/* ---------- Ajustes: pestañas visibles ---------- */
+/* ---------- Ajustes: pestañas (orden y visibles) ---------- */
 .tabs-hint { margin: 0 0 14px; }
-.tab-row { margin-bottom: 10px; }
-.tab-row:last-child { margin-bottom: 0; }
-.tab-row-name { display: flex; align-items: center; gap: 10px; }
-.tab-row-name svg { width: 20px; height: 20px; color: var(--muted); }
+.tabs-list { display: flex; flex-direction: column; gap: 8px; }
+.tab-card {
+  position: relative; display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 4px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+}
+.tab-card.in-bar { border-color: var(--accent); background: var(--accent-soft); }
+.tab-card.is-hidden .tab-row-name { opacity: .45; }
+.tab-card.dragging { z-index: 5; box-shadow: 0 8px 20px rgba(0, 0, 0, .18); transition: none; }
+.tab-handle { flex: none; padding: 8px 10px; font-size: 22px; line-height: 1; color: var(--muted); cursor: grab; touch-action: none; user-select: none; }
+.tab-row-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
+.tab-row-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab-row-name svg { flex: none; width: 20px; height: 20px; color: var(--muted); }
+.tab-badge { flex: none; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; }
+.tab-arrows { flex: none; display: flex; }
+.tab-arrows .icon-btn { width: 32px; height: 32px; }
+.switch-spacer { flex: none; width: 46px; }
 
 /* ---------- Rutina del peque ---------- */
 .kid-top { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }

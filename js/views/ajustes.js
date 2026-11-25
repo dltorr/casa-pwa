@@ -4,8 +4,7 @@ import * as store from '../store.js';
 import { h, icon, field, empty, sectionTitle } from '../ui.js';
 import { VERSION } from '../version.js';
 import { FLOORS } from './casa.js';
-import { ITEMS as MAS_ITEMS } from './mas.js';
-import { BOTTOM, FIXED, isHidden, setHidden } from '../tabs.js';
+import { BAR_SIZE, FIXED, info, order, setOrder, isHidden, setHidden, barRoutes, onTabsChange } from '../tabs.js';
 
 function connectionForm() {
   const c = store.getConn();
@@ -105,21 +104,95 @@ function nameForm() {
   }, field('Nombre de quien usa este móvil', input), h('button', { class: 'btn primary block', type: 'submit' }, 'Guardar nombre'), saved);
 }
 
-// Pestañas que ve este móvil: cada uno activa las suyas.
+// Pestañas de este móvil: tarjetas que se ordenan arrastrando el asa (≡) o con las
+// flechas, y un interruptor para mostrarlas u ocultarlas. Las 4 primeras activas van a la
+// barra inferior (llevan la marca «Barra»); el resto, dentro de «Más».
 function tabsPanel() {
-  const all = [...BOTTOM, ...MAS_ITEMS].filter(([route]) => !FIXED.has(route));
-  return h('div', { class: 'panel' },
-    h('p', { class: 'hint tabs-hint' }, 'Solo en este móvil. Las ocultas no salen en la barra, en «Más» ni al deslizar; sus datos se siguen guardando.'),
-    all.map(([route, ic, label]) => {
-      const sw = h('input', { type: 'checkbox', class: 'switch', 'aria-label': 'Mostrar ' + label });
-      sw.checked = !isHidden(route);
+  const list = h('div', { class: 'tabs-list', 'data-noswipe': '' });
+
+  const move = (route, delta) => {
+    const o = order();
+    const i = o.indexOf(route);
+    const j = i + delta;
+    if (j < 0 || j >= o.length) return;
+    [o[i], o[j]] = [o[j], o[i]];
+    setOrder(o);
+  };
+
+  function card(route, i, total, bar) {
+    const [, ic, label] = info(route);
+    const hidden = isHidden(route);
+    const handle = h('span', { class: 'tab-handle', 'aria-hidden': 'true' }, '≡');
+    const sw = !FIXED.has(route) && h('input', { type: 'checkbox', class: 'switch', 'aria-label': 'Mostrar ' + label });
+    if (sw) {
+      sw.checked = !hidden;
       sw.addEventListener('change', () => setHidden(route, !sw.checked));
-      return h('label', { class: 'switch-row tab-row' }, h('span', { class: 'tab-row-name' }, icon(ic), label), sw);
-    }));
+    }
+    const el = h('div', { class: 'tab-card' + (bar ? ' in-bar' : '') + (hidden ? ' is-hidden' : ''), 'data-route': route },
+      handle,
+      h('span', { class: 'tab-row-name' }, icon(ic), h('span', {}, label)),
+      bar ? h('span', { class: 'tab-badge' }, 'Barra') : null,
+      h('span', { class: 'tab-arrows' },
+        h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Subir ' + label, disabled: i === 0, onclick: () => move(route, -1) }, icon('chup')),
+        h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Bajar ' + label, disabled: i === total - 1, onclick: () => move(route, 1) }, icon('chdown'))),
+      sw || h('span', { class: 'switch-spacer' }));
+    dragFrom(handle, el);
+    return el;
+  }
+
+  // Arrastre con el asa: la tarjeta sigue al dedo y las demás se apartan al cruzar su mitad.
+  function dragFrom(handle, el) {
+    handle.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      handle.setPointerCapture(e.pointerId);
+      const startY = e.clientY;
+      const top0 = el.offsetTop;
+      el.classList.add('dragging');
+      const onMove = (ev) => {
+        const dy = ev.clientY - startY;
+        el.style.transform = `translateY(${dy}px)`;
+        const mid = top0 + dy + el.offsetHeight / 2;
+        const others = [...list.children].filter((c) => c !== el);
+        const before = others.find((c) => mid < c.offsetTop + c.offsetHeight / 2);
+        const ref = before || null;
+        if (el.nextSibling !== ref) {
+          list.insertBefore(el, ref);
+          el.style.transform = `translateY(${top0 + dy - el.offsetTop}px)`;
+        }
+      };
+      const onUp = () => {
+        handle.removeEventListener('pointermove', onMove);
+        handle.removeEventListener('pointerup', onUp);
+        handle.removeEventListener('pointercancel', onUp);
+        el.classList.remove('dragging');
+        el.style.transform = '';
+        setOrder([...list.children].map((c) => c.dataset.route));
+      };
+      handle.addEventListener('pointermove', onMove);
+      handle.addEventListener('pointerup', onUp);
+      handle.addEventListener('pointercancel', onUp);
+    });
+  }
+
+  function paint() {
+    const o = order();
+    const bar = new Set(barRoutes());
+    list.replaceChildren(...o.map((r, i) => card(r, i, o.length, bar.has(r))));
+  }
+  paint();
+  const unsub = onTabsChange(paint);
+
+  const el = h('div', { class: 'panel' },
+    h('p', { class: 'hint tabs-hint' },
+      `Solo en este móvil. Las ${BAR_SIZE} primeras activas (marca «Barra») salen abajo; el resto, dentro de «Más». `
+      + 'Ordénalas arrastrando ≡ o con las flechas. Las ocultas no salen en ningún sitio, pero sus datos se siguen guardando.'),
+    list);
+  return { el, unsub };
 }
 
 export default function render(root) {
   const conn = connectionForm();
+  const tabs = tabsPanel();
 
   const roomInput = h('input', { type: 'text', placeholder: 'Nueva habitación…', autocomplete: 'off', 'aria-label': 'Nueva habitación' });
   const roomForm = h('form', {
@@ -143,7 +216,7 @@ export default function render(root) {
     sectionTitle('Tu nombre'),
     nameForm(),
     sectionTitle('Pestañas'),
-    tabsPanel(),
+    tabs.el,
     sectionTitle('Conexión'),
     conn.form,
     sectionTitle('Habitaciones y ubicaciones'),
@@ -153,5 +226,5 @@ export default function render(root) {
 
   const unsub = store.subscribe('config', draw);
   draw();
-  return () => { unsub(); conn.unsub(); };
+  return () => { unsub(); conn.unsub(); tabs.unsub(); };
 }

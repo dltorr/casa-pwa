@@ -6,7 +6,7 @@ import casa from './views/casa.js';
 import tareas from './views/tareas.js';
 import batch from './views/batch.js';
 import calendario from './views/calendario.js';
-import mas, { ITEMS as MAS_ITEMS } from './views/mas.js';
+import mas from './views/mas.js';
 import compra from './views/compra.js';
 import almacen from './views/almacen.js';
 import ajustes from './views/ajustes.js';
@@ -15,28 +15,28 @@ import menu, { autoCheckMenu } from './views/menu.js';
 import semanal from './views/semanal.js';
 import mandos from './views/mandos.js';
 import rutina from './views/rutina.js';
-import { BOTTOM, isHidden, onTabsChange } from './tabs.js';
+import { MAS, info, barRoutes, swipeRoutes, inBar, onTabsChange } from './tabs.js';
 import { sheet, field } from './ui.js';
 import { initConflicts } from './components/conflicts.js';
 
-// Para añadir una sección: crear su vista y añadirla aquí (en TABS o dentro de "Más").
+// Para añadir una sección: crear su vista, añadirla aquí y en CATALOG (tabs.js).
+// Si va en la barra o dentro de «Más» lo decide el orden que elige cada móvil.
 const ROUTES = {
   casa:       { title: 'Casa',               view: casa },
   tareas:     { title: 'Tareas',             view: tareas },
   batch:      { title: 'Batch cooking',      view: batch },
   calendario: { title: 'Calendario',         view: calendario },
   mas:        { title: 'Más',                view: mas },
-  compra:     { title: 'Lista de la compra', view: compra,  parent: 'mas' },
-  almacen:    { title: 'Almacenaje',         view: almacen, parent: 'mas' },
-  ajustes:    { title: 'Ajustes',            view: ajustes, parent: 'mas' },
-  mejoras:    { title: 'Mejoras de la app',  view: mejoras, parent: 'mas' },
-  menu:       { title: 'Menú Trueba',        view: menu,    parent: 'mas' },
-  semanal:    { title: 'Menú semanal',       view: semanal, parent: 'mas' },
-  mandos:     { title: 'Mandos',             view: mandos,  parent: 'mas' },
-  rutina:     { title: 'Rutina del peque',   view: rutina,  parent: 'mas' },
+  compra:     { title: 'Lista de la compra', view: compra },
+  almacen:    { title: 'Almacenaje',         view: almacen },
+  ajustes:    { title: 'Ajustes',            view: ajustes },
+  mejoras:    { title: 'Mejoras de la app',  view: mejoras },
+  menu:       { title: 'Menú Trueba',        view: menu },
+  semanal:    { title: 'Menú semanal',       view: semanal },
+  mandos:     { title: 'Mandos',             view: mandos },
+  rutina:     { title: 'Rutina del peque',   view: rutina },
 };
 
-const TABS = BOTTOM;   // en tabs.js, junto con qué pestañas oculta cada móvil
 
 const main = document.getElementById('main');
 const titleEl = document.getElementById('title');
@@ -53,14 +53,23 @@ const updateBtn = document.getElementById('update');
 updateBtn.addEventListener('click', () => location.reload());
 function markUpdatePending() { updateBtn.hidden = false; }
 
-const tabEls = TABS.map(([route, ic, label]) => {
-  const a = h('a', { class: 'tab', href: '#/' + route }, icon(ic), h('span', {}, label));
-  tabbar.append(a);
-  return [route, a];
-});
-const paintTabs = () => tabEls.forEach(([r, a]) => { a.hidden = isHidden(r); });
-paintTabs();
-onTabsChange(paintTabs);
+// Barra inferior: las 4 primeras pestañas visibles de este móvil + «Más».
+// Etiqueta corta en la barra (la larga es para «Más» y Ajustes).
+const SHORT = { batch: 'Batch', rutina: 'Rutina', semanal: 'Semanal', menu: 'Trueba', compra: 'Compra', mejoras: 'Mejoras' };
+let tabEls = [];
+function paintTabs() {
+  tabEls = [...barRoutes(), MAS[0]].map((route) => {
+    const [, ic, label] = info(route);
+    return [route, h('a', { class: 'tab', href: '#/' + route }, icon(ic), h('span', {}, SHORT[route] || label))];
+  });
+  tabbar.replaceChildren(...tabEls.map(([, a]) => a));
+  markTab();
+}
+// Resalta la pestaña actual; lo que no está en la barra cuelga de «Más».
+function markTab() {
+  const active = inBar(current) ? current : 'mas';
+  tabEls.forEach(([r, a]) => (r === active ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')));
+}
 
 store.onStatus((s) => {
   statusBtn.textContent = s.text;
@@ -83,9 +92,8 @@ function navigate() {
 
   titleEl.textContent = route.title;
   document.title = route.title + ' · Casa';
-  backBtn.hidden = !route.parent;
-  const activeTab = route.parent || name;
-  tabEls.forEach(([r, a]) => (r === activeTab ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')));
+  backBtn.hidden = inBar(name);
+  markTab();
 
   cleanup = route.view(main, params) || null;
   slideIn();
@@ -94,9 +102,8 @@ function navigate() {
 // ---------- Swipe entre pestañas ----------
 // Orden: las de la barra inferior y, tras «Más», sus páginas en el orden de su lista.
 // Dedo de derecha a izquierda -> siguiente; de izquierda a derecha -> anterior.
-// Las pestañas ocultas en este móvil se saltan.
-const SWIPE_ORDER = [...TABS.map((t) => t[0]), ...MAS_ITEMS.map((i) => i[0])];
-const swipeOrder = () => SWIPE_ORDER.filter((r) => !isHidden(r));
+// Mismo orden que ha elegido este móvil; las pestañas ocultas se saltan (tabs.js).
+const swipeOrder = swipeRoutes;
 // Zonas donde el dedo ya tiene otro uso: el touchpad del Chromecast, campos de texto,
 // el plano al colocar una habitación, zonas con scroll horizontal...
 const NO_SWIPE = 'input, textarea, select, .touchpad, .zoom-scroll, .diff, .plan.placing, [data-noswipe]';
@@ -186,6 +193,8 @@ function slideIn() {
 }
 
 window.addEventListener('hashchange', navigate);
+paintTabs();
+onTabsChange(paintTabs);
 navigate();
 initConflicts();
 store.connect();
