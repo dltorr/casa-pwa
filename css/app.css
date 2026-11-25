@@ -477,6 +477,10 @@ dialog.zoom::backdrop { background: #000; }
 .cine-main.is-on { background: var(--danger); }
 .cine-main:active { transform: scale(.98); filter: brightness(1.15); }
 .cine-main:disabled { opacity: .4; cursor: not-allowed; }
+.remote button:disabled { opacity: .4; cursor: not-allowed; }
+/* Chromecast bloqueado: también el panel táctil y la pulsación larga */
+.rc-ctrls.locked { opacity: .4; pointer-events: none; }
+.rc-ctrls.locked button:disabled, .rc-ctrls.locked input:disabled, .rc-ctrls.locked select:disabled { opacity: 1; }
 .cine-sep { margin-top: 12px; }
 .cine-sep summary { cursor: pointer; font-size: 13px; color: var(--muted); padding: 6px 0; }
 .cine-sep-body { display: flex; flex-direction: column; gap: 10px; padding-top: 6px; }

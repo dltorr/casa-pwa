@@ -165,13 +165,9 @@ function chromecastCard() {
   paintMode();
   const oldBridge = h('p', { class: 'notice', hidden: true }, 'El puente es antiguo: actualízalo para usar "Buscar en YouTube / Netflix".');
 
-  const card = h('div', { class: 'card remote' },
-    h('div', { class: 'remote-head' },
-      dot,
-      h('div', { class: 'remote-title' }, h('span', { class: 'card-title' }, 'Chromecast'), statusText),
-      latency),
-    h('div', { class: 'remote-info' }, appText, volText),
-
+  // Todo lo que manda órdenes va aquí dentro: se bloquea entero (botones, panel táctil
+  // y búsqueda) si la app no está conectada o el puente/Chromecast no están disponibles.
+  const ctrls = h('div', { class: 'rc-ctrls' },
     h('div', { class: 'rc-row' },
       btn('power', 'Encender / apagar', 'POWER', 'danger'),
       btn('mute', 'Silencio', 'VOLUME_MUTE'),
@@ -194,6 +190,14 @@ function chromecastCard() {
     oldBridge,
     searchForm);
 
+  const card = h('div', { class: 'card remote' },
+    h('div', { class: 'remote-head' },
+      dot,
+      h('div', { class: 'remote-title' }, h('span', { class: 'card-title' }, 'Chromecast'), statusText),
+      latency),
+    h('div', { class: 'remote-info' }, appText, volText),
+    ctrls);
+
   const unsubAck = store.onTopic(ACK, (a) => {
     const t0 = pending.get(a.id);
     if (t0 === undefined) return;
@@ -202,19 +206,33 @@ function chromecastCard() {
     latency.textContent = a.ok ? `${Math.round(performance.now() - t0)} ms` : a.error || 'Error';
   });
 
-  const unsubState = store.onTopic(STATE, (s) => {
-    const ready = s.online && s.available;
-    oldBridge.hidden = !s.online || !olderThan(s.bridge, BRIDGE_MIN);
-    dot.className = 'dev-dot ' + (ready ? (s.on ? 'on' : 'standby') : 'off');
-    statusText.textContent = !s.online ? 'Puente desconectado'
-      : !s.available ? 'Chromecast no disponible'
-        : s.on ? 'Encendido' : 'En reposo';
+  let appOk = store.isConnected();
+  let s = null;   // último estado del puente
+  function paint() {
+    const ready = appOk && !!s && s.online && s.available;
+    oldBridge.hidden = !appOk || !s || !s.online || !olderThan(s.bridge, BRIDGE_MIN);
+    dot.className = 'dev-dot ' + (!appOk || !s ? '' : ready ? (s.on ? 'on' : 'standby') : 'off');
+    statusText.textContent = !appOk ? 'App sin conexión'
+      : !s ? 'Sin datos del puente'
+        : !s.online ? 'Puente desconectado'
+          : !s.available ? 'Chromecast no disponible'
+            : s.on ? 'Encendido' : 'En reposo';
     appText.textContent = ready && s.on ? 'App: ' + appName(s.app) : '';
-    const v = s.volume;
-    volText.textContent = ready && v ? (v.muted ? 'Volumen: silencio' : `Volumen: ${v.level}/${v.max}`) : '';
-  });
+    const v = ready ? s.volume : null;
+    volText.textContent = v ? (v.muted ? 'Volumen: silencio' : `Volumen: ${v.level}/${v.max}`) : '';
+    ctrls.classList.toggle('locked', !ready);
+    ctrls.querySelectorAll('button, input, select').forEach((el) => { el.disabled = !ready; });
+  }
 
-  return { el: card, cleanup: () => { unsubAck(); unsubState(); } };
+  const unsubState = store.onTopic(STATE, (st) => {
+    if (!st || typeof st !== 'object') return;
+    s = st;
+    paint();
+  });
+  const unsubStatus = store.onStatus((st) => { appOk = !!st.ok; paint(); });
+
+  paint();
+  return { el: card, cleanup: () => { unsubAck(); unsubState(); unsubStatus(); } };
 }
 
 // ---------- Cine: proyector (IR) + pantalla (RF 433) ----------
@@ -235,6 +253,7 @@ const newId = () => Math.random().toString(36).slice(2, 9);
 function cineCard() {
   const nodes = { proyector: { online: false, rssi: null, known: false }, pantalla: { online: false, rssi: null, known: false } };
   let activo = false;
+  let appOk = store.isConnected();   // sin conexión con el broker no sale ninguna orden
 
   const dot = h('span', { class: 'dev-dot' });
   const statusText = h('span', { class: 'dev-status' });
@@ -267,16 +286,18 @@ function cineCard() {
 
   function nodeTag(name, label) {
     const n = nodes[name];
+    if (!appOk) return h('span', { class: 'cine-node' }, label, h('span', { class: 'cine-off' }, 'sin conexión'));
     const ic = n.online ? wifiIcon(n.rssi) : null;
     return h('span', { class: 'cine-node' + (n.online ? '' : ' off'), title: ic ? `WiFi: ${wifiPct(n.rssi)} % (${n.rssi} dBm)` : '' },
       label, ic || h('span', { class: 'cine-off' }, n.known ? 'desconectado' : 'sin datos'));
   }
 
   function paint() {
-    const p = nodes.proyector.online;
-    const s = nodes.pantalla.online;
-    dot.className = 'dev-dot ' + (p && s ? (activo ? 'on' : 'standby') : (p || s ? 'standby' : 'off'));
-    statusText.textContent = !(p && s) ? (p || s ? 'Falta un nodo' : 'Nodos desconectados') : (activo ? 'Cine puesto' : 'Apagado');
+    const p = appOk && nodes.proyector.online;
+    const s = appOk && nodes.pantalla.online;
+    dot.className = 'dev-dot ' + (!appOk ? '' : p && s ? (activo ? 'on' : 'standby') : (p || s ? 'standby' : 'off'));
+    statusText.textContent = !appOk ? 'App sin conexión'
+      : !(p && s) ? (p || s ? 'Falta un nodo' : 'Nodos desconectados') : (activo ? 'Cine puesto' : 'Apagado');
     nodeLine.replaceChildren(nodeTag('proyector', 'Proyector'), nodeTag('pantalla', 'Pantalla'));
     mainBtn.textContent = activo ? 'Acabar cine' : 'Empezar cine';
     mainBtn.classList.toggle('is-on', activo);
@@ -304,6 +325,7 @@ function cineCard() {
     store.onTopic(P_STATE, onNode('proyector')),
     store.onTopic(S_STATE, onNode('pantalla')),
     store.onTopic(CINE_STATE, (c) => { if (c && typeof c === 'object') { activo = !!c.activo; paint(); } }),
+    store.onStatus((st) => { appOk = !!st.ok; paint(); }),
   ];
 
   paint();
@@ -326,6 +348,7 @@ function airCard() {
   let online = false;
   let rssi = null;
   let known = false;      // ya llegó algún estado del nodo
+  let appOk = store.isConnected();   // sin conexión con el broker no sale ninguna orden
   let lastLocal = 0;      // último cambio hecho aquí (para no pisarlo con un estado viejo)
   let timer = null;
 
@@ -382,11 +405,12 @@ function airCard() {
   const modeLabel = () => (AIR_MODES.find((m) => m[0] === st.mode) || [])[2] || '';
 
   function paint() {
-    const ready = online && known;
-    dot.className = 'dev-dot ' + (!online ? 'off' : st.power ? 'on' : 'standby');
-    statusText.textContent = !online ? (known ? 'Nodo desconectado' : 'Sin datos del nodo')
-      : st.power ? `${modeLabel()} · ${st.temp} °C` : 'Apagado';
-    const ic = online ? wifiIcon(rssi) : null;
+    const ready = appOk && online && known;
+    dot.className = 'dev-dot ' + (!appOk ? '' : !online ? 'off' : st.power ? 'on' : 'standby');
+    statusText.textContent = !appOk ? 'App sin conexión'
+      : !online ? (known ? 'Nodo desconectado' : 'Sin datos del nodo')
+        : st.power ? `${modeLabel()} · ${st.temp} °C` : 'Apagado';
+    const ic = appOk && online ? wifiIcon(rssi) : null;
     wifiBox.replaceChildren(...(ic ? [ic] : []));
     wifiBox.title = ic ? `WiFi del nodo: ${wifiPct(rssi)} % (${rssi} dBm)` : '';
     powerBtn.classList.toggle('is-on', st.power);
@@ -429,8 +453,10 @@ function airCard() {
     paint();
   });
 
+  const unsubStatus = store.onStatus((s) => { appOk = !!s.ok; paint(); });
+
   paint();
-  return { el: card, cleanup: () => { unsub(); if (timer) send(); } };
+  return { el: card, cleanup: () => { unsub(); unsubStatus(); if (timer) send(); } };
 }
 
 export default function render(root) {
