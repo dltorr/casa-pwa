@@ -247,6 +247,11 @@ const P_STATE = 'casa/proyector/estado';
 const S_CMD = 'casa/pantalla/cmd';
 const S_STATE = 'casa/pantalla/estado';
 const CINE_STATE = 'casa/cine/estado';
+// Proyector, pantalla y aire van en el mismo ESP32 del salón (nodo5). Una conexión MQTT
+// solo tiene una última voluntad y va aquí ("online" / "offline"): si el nodo se cae, sus
+// temas de mando no se enteran. Un mando solo está conectado si él Y el nodo lo están.
+const SALON_STATE = 'casa/sensor/nodo5/estado';
+const salonCaido = (v) => v === 'offline';
 
 const newId = () => Math.random().toString(36).slice(2, 9);
 
@@ -254,6 +259,8 @@ function cineCard() {
   const nodes = { proyector: { online: false, rssi: null, known: false }, pantalla: { online: false, rssi: null, known: false } };
   let activo = false;
   let appOk = store.isConnected();   // sin conexión con el broker no sale ninguna orden
+  let salonOff = false;              // el ESP32 del salón ha caído
+  const up = (name) => nodes[name].online && !salonOff;
 
   const dot = h('span', { class: 'dev-dot' });
   const statusText = h('span', { class: 'dev-status' });
@@ -287,14 +294,15 @@ function cineCard() {
   function nodeTag(name, label) {
     const n = nodes[name];
     if (!appOk) return h('span', { class: 'cine-node' }, label, h('span', { class: 'cine-off' }, 'sin conexión'));
-    const ic = n.online ? wifiIcon(n.rssi) : null;
-    return h('span', { class: 'cine-node' + (n.online ? '' : ' off'), title: ic ? `WiFi: ${wifiPct(n.rssi)} % (${n.rssi} dBm)` : '' },
+    const on = up(name);
+    const ic = on ? wifiIcon(n.rssi) : null;
+    return h('span', { class: 'cine-node' + (on ? '' : ' off'), title: ic ? `WiFi: ${wifiPct(n.rssi)} % (${n.rssi} dBm)` : '' },
       label, ic || h('span', { class: 'cine-off' }, n.known ? 'desconectado' : 'sin datos'));
   }
 
   function paint() {
-    const p = appOk && nodes.proyector.online;
-    const s = appOk && nodes.pantalla.online;
+    const p = appOk && up('proyector');
+    const s = appOk && up('pantalla');
     dot.className = 'dev-dot ' + (!appOk ? '' : p && s ? (activo ? 'on' : 'standby') : (p || s ? 'standby' : 'off'));
     statusText.textContent = !appOk ? 'App sin conexión'
       : !(p && s) ? (p || s ? 'Falta un nodo' : 'Nodos desconectados') : (activo ? 'Cine puesto' : 'Apagado');
@@ -326,6 +334,7 @@ function cineCard() {
     store.onTopic(S_STATE, onNode('pantalla')),
     store.onTopic(CINE_STATE, (c) => { if (c && typeof c === 'object') { activo = !!c.activo; paint(); } }),
     store.onStatus((st) => { appOk = !!st.ok; paint(); }),
+    store.onTopic(SALON_STATE, (v) => { salonOff = salonCaido(v); paint(); }),
   ];
 
   paint();
@@ -349,6 +358,7 @@ function airCard() {
   let rssi = null;
   let known = false;      // ya llegó algún estado del nodo
   let appOk = store.isConnected();   // sin conexión con el broker no sale ninguna orden
+  let salonOff = false;              // el ESP32 del salón ha caído
   let lastLocal = 0;      // último cambio hecho aquí (para no pisarlo con un estado viejo)
   let timer = null;
 
@@ -405,12 +415,13 @@ function airCard() {
   const modeLabel = () => (AIR_MODES.find((m) => m[0] === st.mode) || [])[2] || '';
 
   function paint() {
-    const ready = appOk && online && known;
-    dot.className = 'dev-dot ' + (!appOk ? '' : !online ? 'off' : st.power ? 'on' : 'standby');
+    const on = online && !salonOff;
+    const ready = appOk && on && known;
+    dot.className = 'dev-dot ' + (!appOk ? '' : !on ? 'off' : st.power ? 'on' : 'standby');
     statusText.textContent = !appOk ? 'App sin conexión'
-      : !online ? (known ? 'Nodo desconectado' : 'Sin datos del nodo')
+      : !on ? (known || salonOff ? 'Nodo desconectado' : 'Sin datos del nodo')
         : st.power ? `${modeLabel()} · ${st.temp} °C` : 'Apagado';
-    const ic = appOk && online ? wifiIcon(rssi) : null;
+    const ic = appOk && on ? wifiIcon(rssi) : null;
     wifiBox.replaceChildren(...(ic ? [ic] : []));
     wifiBox.title = ic ? `WiFi del nodo: ${wifiPct(rssi)} % (${rssi} dBm)` : '';
     powerBtn.classList.toggle('is-on', st.power);
@@ -454,9 +465,10 @@ function airCard() {
   });
 
   const unsubStatus = store.onStatus((s) => { appOk = !!s.ok; paint(); });
+  const unsubSalon = store.onTopic(SALON_STATE, (v) => { salonOff = salonCaido(v); paint(); });
 
   paint();
-  return { el: card, cleanup: () => { unsub(); unsubStatus(); if (timer) send(); } };
+  return { el: card, cleanup: () => { unsub(); unsubStatus(); unsubSalon(); if (timer) send(); } };
 }
 
 export default function render(root) {
