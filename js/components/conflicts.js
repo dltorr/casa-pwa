@@ -8,7 +8,7 @@ import { eq } from '../sync.js';
 const SECTION_LABEL = {
   batch: 'Batch cooking', compra: 'Lista de la compra', tareas: 'Tareas', calendario: 'Calendario',
   almacen: 'Almacenaje', mejoras: 'Mejoras de la app', config: 'Ajustes', mapa: 'Mapa',
-  semanal: 'Menú semanal',
+  semanal: 'Menú semanal', rutina: 'Rutina del peque',
 };
 const HIDDEN_KEYS = new Set(['id', 'createdBy', 'createdAt', 'updatedBy', 'updatedAt']);
 const FIELD_LABEL = {

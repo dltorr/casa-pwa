@@ -23,6 +23,23 @@ const DEFAULTS = {
   semanal: [],        // un elemento por día con algo escrito: [{id: 'AAAA-MM-DD', comida, cena}]
   config: { rooms: [] },               // rooms: [{id, name, code, pos: {floor, x, y}, locations: [{id, name}]}]
   mapa: { plan: null, devices: [] },   // futuro: devices [{id, name, kind, roomId, x, y, topic}]
+  // Rutina del peque: dos rutinas (mañana / noche) con hora límite y momento de inicio,
+  // y sus tareas [{id, rutina, icon, name, done (ms o null), pts}]
+  rutina: {
+    manana: { hora: '08:30', inicio: null },
+    noche: { hora: '20:30', inicio: null },
+    tareas: [
+      { id: 'm1', rutina: 'manana', icon: '🚽', name: 'Pis', done: null, pts: 0 },
+      { id: 'm2', rutina: 'manana', icon: '👕', name: 'Vestirse', done: null, pts: 0 },
+      { id: 'm3', rutina: 'manana', icon: '🥣', name: 'Desayunar', done: null, pts: 0 },
+      { id: 'm4', rutina: 'manana', icon: '🪥', name: 'Dientes', done: null, pts: 0 },
+      { id: 'm5', rutina: 'manana', icon: '👟', name: 'Zapatos', done: null, pts: 0 },
+      { id: 'n1', rutina: 'noche', icon: '🛁', name: 'Baño', done: null, pts: 0 },
+      { id: 'n2', rutina: 'noche', icon: '🧸', name: 'Recoger', done: null, pts: 0 },
+      { id: 'n3', rutina: 'noche', icon: '🪥', name: 'Dientes', done: null, pts: 0 },
+      { id: 'n4', rutina: 'noche', icon: '📖', name: 'Cuento', done: null, pts: 0 },
+    ],
+  },
 };
 
 export const SECTIONS = Object.keys(DEFAULTS);

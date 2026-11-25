@@ -14,6 +14,8 @@ import mejoras from './views/mejoras.js';
 import menu, { autoCheckMenu } from './views/menu.js';
 import semanal from './views/semanal.js';
 import mandos from './views/mandos.js';
+import rutina from './views/rutina.js';
+import { BOTTOM, isHidden, onTabsChange } from './tabs.js';
 import { sheet, field } from './ui.js';
 import { initConflicts } from './components/conflicts.js';
 
@@ -31,15 +33,10 @@ const ROUTES = {
   menu:       { title: 'Menú Trueba',        view: menu,    parent: 'mas' },
   semanal:    { title: 'Menú semanal',       view: semanal, parent: 'mas' },
   mandos:     { title: 'Mandos',             view: mandos,  parent: 'mas' },
+  rutina:     { title: 'Rutina del peque',   view: rutina,  parent: 'mas' },
 };
 
-const TABS = [
-  ['casa', 'hex', 'Casa'],
-  ['tareas', 'check', 'Tareas'],
-  ['batch', 'pot', 'Batch'],
-  ['calendario', 'calendar', 'Calendario'],
-  ['mas', 'dots', 'Más'],
-];
+const TABS = BOTTOM;   // en tabs.js, junto con qué pestañas oculta cada móvil
 
 const main = document.getElementById('main');
 const titleEl = document.getElementById('title');
@@ -61,6 +58,9 @@ const tabEls = TABS.map(([route, ic, label]) => {
   tabbar.append(a);
   return [route, a];
 });
+const paintTabs = () => tabEls.forEach(([r, a]) => { a.hidden = isHidden(r); });
+paintTabs();
+onTabsChange(paintTabs);
 
 store.onStatus((s) => {
   statusBtn.textContent = s.text;
@@ -94,7 +94,9 @@ function navigate() {
 // ---------- Swipe entre pestañas ----------
 // Orden: las de la barra inferior y, tras «Más», sus páginas en el orden de su lista.
 // Dedo de derecha a izquierda -> siguiente; de izquierda a derecha -> anterior.
+// Las pestañas ocultas en este móvil se saltan.
 const SWIPE_ORDER = [...TABS.map((t) => t[0]), ...MAS_ITEMS.map((i) => i[0])];
+const swipeOrder = () => SWIPE_ORDER.filter((r) => !isHidden(r));
 // Zonas donde el dedo ya tiene otro uso: el touchpad del Chromecast, campos de texto,
 // el plano al colocar una habitación, zonas con scroll horizontal...
 const NO_SWIPE = 'input, textarea, select, .touchpad, .zoom-scroll, .diff, .plan.placing, [data-noswipe]';
@@ -120,10 +122,11 @@ const slide = (x, ms, ease = 'ease-out') => {
   main.style.transform = x ? `translateX(${x}px)` : '';
 };
 const neighbour = (dx) => {
-  const i = SWIPE_ORDER.indexOf(current);
+  const order = swipeOrder();
+  const i = order.indexOf(current);
   if (i < 0) return null;
-  const n = SWIPE_ORDER.length;
-  return SWIPE_ORDER[(i + (dx < 0 ? 1 : -1) + n) % n];   // cíclico: tras Ajustes vuelve a Casa
+  const n = order.length;
+  return order[(i + (dx < 0 ? 1 : -1) + n) % n];   // cíclico: tras Ajustes vuelve a Casa
 };
 
 document.addEventListener('touchstart', (e) => {

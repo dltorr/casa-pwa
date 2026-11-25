@@ -4,6 +4,8 @@ import * as store from '../store.js';
 import { h, icon, field, empty, sectionTitle } from '../ui.js';
 import { VERSION } from '../version.js';
 import { FLOORS } from './casa.js';
+import { ITEMS as MAS_ITEMS } from './mas.js';
+import { BOTTOM, FIXED, isHidden, setHidden } from '../tabs.js';
 
 function connectionForm() {
   const c = store.getConn();
@@ -103,6 +105,19 @@ function nameForm() {
   }, field('Nombre de quien usa este móvil', input), h('button', { class: 'btn primary block', type: 'submit' }, 'Guardar nombre'), saved);
 }
 
+// Pestañas que ve este móvil: cada uno activa las suyas.
+function tabsPanel() {
+  const all = [...BOTTOM, ...MAS_ITEMS].filter(([route]) => !FIXED.has(route));
+  return h('div', { class: 'panel' },
+    h('p', { class: 'hint tabs-hint' }, 'Solo en este móvil. Las ocultas no salen en la barra, en «Más» ni al deslizar; sus datos se siguen guardando.'),
+    all.map(([route, ic, label]) => {
+      const sw = h('input', { type: 'checkbox', class: 'switch', 'aria-label': 'Mostrar ' + label });
+      sw.checked = !isHidden(route);
+      sw.addEventListener('change', () => setHidden(route, !sw.checked));
+      return h('label', { class: 'switch-row tab-row' }, h('span', { class: 'tab-row-name' }, icon(ic), label), sw);
+    }));
+}
+
 export default function render(root) {
   const conn = connectionForm();
 
@@ -127,6 +142,8 @@ export default function render(root) {
   root.append(h('div', { class: 'view' },
     sectionTitle('Tu nombre'),
     nameForm(),
+    sectionTitle('Pestañas'),
+    tabsPanel(),
     sectionTitle('Conexión'),
     conn.form,
     sectionTitle('Habitaciones y ubicaciones'),
