@@ -352,6 +352,7 @@ dialog.zoom::backdrop { background: #000; }
 .chart-box { padding: 10px 0 6px; border-bottom: 1px solid var(--border); }
 .chart { display: block; width: 100%; height: auto; }
 .chart-grid { stroke: var(--border); stroke-width: .6; }
+.chart-band { fill: var(--accent); opacity: .18; stroke: none; }
 .chart-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .chart-dot { fill: var(--accent); }
 .chart-label { fill: var(--muted); font-size: 9px; }

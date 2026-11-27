@@ -49,24 +49,35 @@ export function wifiIcon(rssi) {
 }
 
 // ---------- Gráfica de 24 h (casa/historico/<nodo>, la publica la Raspberry) ----------
+// Tramos de `paso` segundos con media, mínimo y máximo. Se pinta desde el primer tramo con
+// datos hasta el último (los ejes se ajustan a lo que hay). Donde falta un tramo, la línea
+// y la franja mín–máx se cortan.
 const HIST_PREFIX = 'casa/historico/';
 const hhmm = (ts) => new Date(ts * 1000).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+const isNum = (v) => typeof v === 'number' && isFinite(v);
 
 function chart(hist, key, unit) {
-  const vals = hist && Array.isArray(hist[key]) ? hist[key] : [];
-  const pts = vals.map((v, i) => (typeof v === 'number' ? [i, v] : null)).filter(Boolean);
-  if (pts.length < 2) {
+  const arr = (k) => (hist && Array.isArray(hist[k]) ? hist[k] : []);
+  const avg = arr(key), mins = arr(key + 'min'), maxs = arr(key + 'max');
+  const first = avg.findIndex(isNum);
+  if (first < 0) {
     return h('p', { class: 'hint chart-empty' }, hist
-      ? 'Recogiendo datos: la gráfica se completa en 24 h.'
-      : 'Sin histórico todavía. Lo genera la Raspberry cada 30 min.');
+      ? 'Recogiendo datos: el primer punto sale en el próximo cuarto de hora.'
+      : 'Sin histórico todavía. Lo genera la Raspberry cada 15 min.');
   }
-  const n = vals.length;
-  const ys = pts.map((p) => p[1]);
-  let lo = Math.min(...ys), hi = Math.max(...ys);
-  const pad = Math.max((hi - lo) * 0.15, unit === '%' ? 2 : 0.5);
+  const paso = hist.paso || 900;
+  const n = avg.length - first;                 // tramos que se pintan (de first al final)
+  const lowOf = (i) => (isNum(mins[i]) ? mins[i] : avg[i]);
+  const highOf = (i) => (isNum(maxs[i]) ? maxs[i] : avg[i]);
+  const idx = [];
+  for (let i = first; i < avg.length; i++) if (isNum(avg[i])) idx.push(i);
+  const lows = idx.map(lowOf), highs = idx.map(highOf);
+  let lo = Math.min(...lows), hi = Math.max(...highs);
+  const pad = Math.max((hi - lo) * 0.12, unit === '%' ? 1 : 0.2);
   lo -= pad; hi += pad;
+
   const W = 300, H = 130, L = 34, R = 6, T = 8, B = 20;
-  const x = (i) => L + (i + 0.5) * ((W - L - R) / n);
+  const x = (i) => L + (i - first + 0.5) * ((W - L - R) / n);
   const y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
   const NS = 'http://www.w3.org/2000/svg';
   const el = (tag, attrs, text) => {
@@ -76,28 +87,45 @@ function chart(hist, key, unit) {
     return e;
   };
   const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chart', role: 'img' });
-  // Rejilla: 3 líneas con su valor
+  const dec = unit === '%' ? 0 : 1;
   [hi - pad, (hi + lo) / 2, lo + pad].forEach((v) => {
     svg.append(el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), class: 'chart-grid' }));
-    svg.append(el('text', { x: L - 4, y: y(v) + 3, class: 'chart-label', 'text-anchor': 'end' }, num(v, unit === '%' ? 0 : 1)));
+    svg.append(el('text', { x: L - 4, y: y(v) + 3, class: 'chart-label', 'text-anchor': 'end' }, num(v, dec)));
   });
-  // Línea cortada donde falten datos
-  let d = '', prev = -2;
-  pts.forEach(([i, v]) => { d += (i === prev + 1 ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1) + ' '; prev = i; });
-  svg.append(el('path', { d, class: 'chart-line' }));
-  pts.forEach(([i, v]) => svg.append(el('circle', { cx: x(i), cy: y(v), r: 1.8, class: 'chart-dot' })));
-  // Eje de tiempo: inicio, mitad y final
-  const t0 = hist.inicio, paso = hist.paso || 1800;
-  [[0, 'start'], [n / 2, 'middle'], [n, 'end']].forEach(([i, anchor]) => {
-    svg.append(el('text', { x: L + i * ((W - L - R) / n), y: H - 5, class: 'chart-label', 'text-anchor': anchor }, hhmm(t0 + i * paso)));
+
+  // Tramos seguidos con dato: cada grupo es un trozo de línea y de franja
+  const runs = [];
+  idx.forEach((i) => { const r = runs[runs.length - 1]; if (r && r[r.length - 1] === i - 1) r.push(i); else runs.push([i]); });
+  const half = ((W - L - R) / n) / 2;
+  runs.forEach((r) => {
+    // Franja mín–máx (un tramo suelto se dibuja como un rectángulo estrecho)
+    const xs = r.length > 1 ? r.map(x) : [x(r[0]) - half / 2, x(r[0]) + half / 2];
+    const top = r.length > 1 ? r.map((i) => y(highOf(i))) : [y(highOf(r[0])), y(highOf(r[0]))];
+    const bot = r.length > 1 ? r.map((i) => y(lowOf(i))) : [y(lowOf(r[0])), y(lowOf(r[0]))];
+    const ptsBand = [...xs.map((xv, k) => `${xv.toFixed(1)},${top[k].toFixed(1)}`),
+      ...xs.map((xv, k) => `${xv.toFixed(1)},${bot[k].toFixed(1)}`).reverse()].join(' ');
+    svg.append(el('polygon', { points: ptsBand, class: 'chart-band' }));
+    if (r.length > 1) {
+      svg.append(el('polyline', { points: r.map((i) => `${x(i).toFixed(1)},${y(avg[i]).toFixed(1)}`).join(' '), class: 'chart-line' }));
+    }
   });
-  const fmt = (v) => `${num(v, unit === '%' ? 0 : 1)} ${unit}`;
+  idx.forEach((i) => svg.append(el('circle', { cx: x(i), cy: y(avg[i]), r: idx.length > 40 ? 1.2 : 2, class: 'chart-dot' })));
+
+  // Eje de tiempo: del inicio del primer tramo pintado al final del último
+  const t0 = hist.inicio + first * paso, t1 = hist.inicio + avg.length * paso;
+  [[L, 'start', t0], [(L + W - R) / 2, 'middle', (t0 + t1) / 2], [W - R, 'end', t1]].forEach(([xv, anchor, t]) => {
+    svg.append(el('text', { x: xv, y: H - 5, class: 'chart-label', 'text-anchor': anchor }, hhmm(t)));
+  });
+
+  const horas = (t1 - t0) / 3600;
+  const span = horas >= 23.9 ? 'Últimas 24 h' : `Últimas ${horas < 1 ? Math.round(horas * 60) + ' min' : num(horas, horas % 1 ? 1 : 0) + ' h'}`;
+  const fmt = (v) => `${num(v, dec)} ${unit}`;
   return h('div', {},
     svg,
     h('div', { class: 'chart-foot' },
-      h('span', {}, `Mín ${fmt(Math.min(...ys))}`),
-      h('span', {}, 'Últimas 24 h · cada 30 min'),
-      h('span', {}, `Máx ${fmt(Math.max(...ys))}`)));
+      h('span', {}, `Mín ${fmt(Math.min(...lows))}`),
+      h('span', {}, `${span} · cada ${Math.round(paso / 60)} min`),
+      h('span', {}, `Máx ${fmt(Math.max(...highs))}`)));
 }
 
 // Punto de rocío (fórmula de Magnus, error < 0,4 °C entre -45 y 60 °C).
