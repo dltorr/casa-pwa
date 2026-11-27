@@ -8,7 +8,7 @@
 // #/casa?colocar=<roomId> -> modo colocar: tocar el plano guarda la posición de esa habitación.
 
 import * as store from '../store.js';
-import { h, sectionTitle, empty, sheet } from '../ui.js';
+import { h, icon, sectionTitle, empty, sheet } from '../ui.js';
 
 export const FLOORS = [
   { id: 'abajo', label: 'Piso abajo', src: '/img/plano-abajo.png' },
@@ -46,6 +46,58 @@ export function wifiIcon(rssi) {
     svg.append(r);
   }
   return svg;
+}
+
+// ---------- Gráfica de 24 h (casa/historico/<nodo>, la publica la Raspberry) ----------
+const HIST_PREFIX = 'casa/historico/';
+const hhmm = (ts) => new Date(ts * 1000).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+function chart(hist, key, unit) {
+  const vals = hist && Array.isArray(hist[key]) ? hist[key] : [];
+  const pts = vals.map((v, i) => (typeof v === 'number' ? [i, v] : null)).filter(Boolean);
+  if (pts.length < 2) {
+    return h('p', { class: 'hint chart-empty' }, hist
+      ? 'Recogiendo datos: la gráfica se completa en 24 h.'
+      : 'Sin histórico todavía. Lo genera la Raspberry cada 30 min.');
+  }
+  const n = vals.length;
+  const ys = pts.map((p) => p[1]);
+  let lo = Math.min(...ys), hi = Math.max(...ys);
+  const pad = Math.max((hi - lo) * 0.15, unit === '%' ? 2 : 0.5);
+  lo -= pad; hi += pad;
+  const W = 300, H = 130, L = 34, R = 6, T = 8, B = 20;
+  const x = (i) => L + (i + 0.5) * ((W - L - R) / n);
+  const y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs, text) => {
+    const e = document.createElementNS(NS, tag);
+    Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, String(v)));
+    if (text != null) e.textContent = text;
+    return e;
+  };
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chart', role: 'img' });
+  // Rejilla: 3 líneas con su valor
+  [hi - pad, (hi + lo) / 2, lo + pad].forEach((v) => {
+    svg.append(el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), class: 'chart-grid' }));
+    svg.append(el('text', { x: L - 4, y: y(v) + 3, class: 'chart-label', 'text-anchor': 'end' }, num(v, unit === '%' ? 0 : 1)));
+  });
+  // Línea cortada donde falten datos
+  let d = '', prev = -2;
+  pts.forEach(([i, v]) => { d += (i === prev + 1 ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1) + ' '; prev = i; });
+  svg.append(el('path', { d, class: 'chart-line' }));
+  pts.forEach(([i, v]) => svg.append(el('circle', { cx: x(i), cy: y(v), r: 1.8, class: 'chart-dot' })));
+  // Eje de tiempo: inicio, mitad y final
+  const t0 = hist.inicio, paso = hist.paso || 1800;
+  [[0, 'start'], [n / 2, 'middle'], [n, 'end']].forEach(([i, anchor]) => {
+    svg.append(el('text', { x: L + i * ((W - L - R) / n), y: H - 5, class: 'chart-label', 'text-anchor': anchor }, hhmm(t0 + i * paso)));
+  });
+  const fmt = (v) => `${num(v, unit === '%' ? 0 : 1)} ${unit}`;
+  return h('div', {},
+    svg,
+    h('div', { class: 'chart-foot' },
+      h('span', {}, `Mín ${fmt(Math.min(...ys))}`),
+      h('span', {}, 'Últimas 24 h · cada 30 min'),
+      h('span', {}, `Máx ${fmt(Math.max(...ys))}`)));
 }
 
 // Punto de rocío (fórmula de Magnus, error < 0,4 °C entre -45 y 60 °C).
@@ -185,10 +237,34 @@ export default function render(root, params) {
     const ts = sensorTs(s);
     const when = new Date(ts * 1000).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const line = (k, v) => h('div', { class: 'kv' }, h('span', {}, k), h('strong', {}, v));
-    sheet(r ? r.name : nodo, h('div', { class: 'kv-list' },
-      line('Temperatura', `${num(tempOf(d), 2)} °C`),
-      line('Humedad', `${num(humOf(d), 1)} %`),
-      line('Punto de rocío', `${num(dewPoint(tempOf(d), humOf(d)), 1)} °C`),
+
+    // Temperatura, humedad y punto de rocío: al tocarlas se abre debajo su gráfica de 24 h.
+    // Solo una abierta a la vez; tocar la misma la cierra.
+    let hist = null;
+    let open = null;   // { key, box }
+    const charts = [];
+    const metric = (key, k, v, unit) => {
+      const box = h('div', { class: 'chart-box', hidden: true });
+      const btn = h('button', { type: 'button', class: 'kv kv-btn', 'aria-expanded': 'false' },
+        h('span', {}, k), h('strong', {}, v, icon('chevron')));
+      const show = () => box.replaceChildren(chart(hist, key, unit));
+      btn.addEventListener('click', () => {
+        const same = open && open.key === key;
+        charts.forEach((c) => { c.box.hidden = true; c.btn.setAttribute('aria-expanded', 'false'); });
+        open = null;
+        if (same) return;
+        show();
+        box.hidden = false;
+        btn.setAttribute('aria-expanded', 'true');
+        open = { key, show };
+      });
+      charts.push({ btn, box });
+      return [btn, box];
+    };
+    const list = h('div', { class: 'kv-list' },
+      ...metric('t', 'Temperatura', `${num(tempOf(d), 2)} °C`, '°C'),
+      ...metric('h', 'Humedad', `${num(humOf(d), 1)} %`, '%'),
+      ...metric('pr', 'Punto de rocío', `${num(dewPoint(tempOf(d), humOf(d)), 1)} °C`, '°C'),
       line('Última lectura', `${when} (${ago(Date.now() / 1000 - ts)})`),
       line('Estado', s.estado === 'offline' ? 'desconectado' : (s.estado === 'online' ? 'conectado' : '–')),
       line('Nodo', nodo),
@@ -198,7 +274,16 @@ export default function render(root, params) {
       line('IP', d.ip || '–'),
       line('Firmware', d.fw || '–'),
       d.err ? line('Sensores con fallo', d.err) : null,
-      !r ? h('p', { class: 'hint' }, `Ninguna habitación tiene el código «${d.ubic}». Ponlo en Más → Ajustes.`) : null));
+      !r ? h('p', { class: 'hint' }, `Ninguna habitación tiene el código «${d.ubic}». Ponlo en Más → Ajustes.`) : null);
+    sheet(r ? r.name : nodo, list);
+    // Medias de 24 h que publica la Raspberry cada 30 min (retenido); si llega una nueva
+    // con la gráfica abierta, se repinta.
+    const unsubHist = store.onTopic(HIST_PREFIX + nodo, (v) => {
+      hist = v && typeof v === 'object' ? v : null;
+      if (open) open.show();
+    });
+    const dlg = list.closest('dialog');
+    if (dlg) dlg.addEventListener('close', unsubHist); else unsubHist();
   }
 
   function drawRooms() {

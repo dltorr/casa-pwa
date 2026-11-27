@@ -345,6 +345,18 @@ dialog.zoom::backdrop { background: #000; }
 .kv { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 15px; }
 .kv span { color: var(--muted); }
 .kv strong { text-align: right; font-weight: 600; overflow-wrap: anywhere; }
+.kv-btn { width: 100%; border: 0; border-bottom: 1px solid var(--border); background: none; color: inherit; font: inherit; font-size: 15px; text-align: left; cursor: pointer; }
+.kv-btn strong { display: inline-flex; align-items: center; gap: 4px; }
+.kv-btn svg { width: 16px; height: 16px; color: var(--muted); transition: transform .2s; }
+.kv-btn[aria-expanded="true"] svg { transform: rotate(90deg); }
+.chart-box { padding: 10px 0 6px; border-bottom: 1px solid var(--border); }
+.chart { display: block; width: 100%; height: auto; }
+.chart-grid { stroke: var(--border); stroke-width: .6; }
+.chart-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart-dot { fill: var(--accent); }
+.chart-label { fill: var(--muted); font-size: 9px; }
+.chart-foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; font-size: 12px; color: var(--muted); }
+.chart-empty { margin: 4px 0; }
 .room-map { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0 4px; }
 .room-map .hint { margin: 0; flex: 1; }
 .code-btn { padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
